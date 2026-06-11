@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GM Control Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;height:100%;}
+body{font-family:'Archivo',system-ui,-apple-system,sans-serif;color:#0B0D10;background:#F4F6F8;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+button{font-family:inherit;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-thumb{background:#D2D9E0;border-radius:6px;border:2px solid #F4F6F8;}
+::-webkit-scrollbar-track{background:transparent;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(0,167,219,.45);}70%{box-shadow:0 0 0 6px rgba(0,167,219,0);}100%{box-shadow:0 0 0 0 rgba(0,167,219,0);}}
+@keyframes spin{to{transform:rotate(360deg);}}
+@keyframes fadeUp{from{transform:translateY(8px);}to{transform:none;}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+"use strict";
+
+/* ---------- tiny vanilla render runtime ----------
+   Ports the design's logic and inline styles verbatim. Dynamic style objects
+   are serialized to CSS strings; click handlers are registered per-render and
+   dispatched via event delegation. State changes trigger a full re-render. */
+
+let H = {}, hid = 0;
+function reg(fn){ if(typeof fn !== 'function') return ''; const id = 'h'+(hid++); H[id] = fn; return id; }
+function css(o){ if(!o) return ''; return Object.keys(o).map(k => k.replace(/[A-Z]/g, m => '-'+m.toLowerCase()) + ':' + o[k]).join(';'); }
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+const App = {
+  state: { screen:'overview', role:'exec', campaignId:null, flightId:null, pdfOpen:false, pdfStep:0, pdfReveal:0, tick:0, filter:'all', addedId:null, added:false, wfSel:null },
+
+  setState(patch){
+    const p = (typeof patch === 'function') ? patch(this.state) : patch;
+    Object.assign(this.state, p);
+    render();
+  },
+
+  componentDidMount(){ this._iv = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 3000); },
+
+  D(s){ return new Date(s + 'T00:00:00'); },
+
+  ST: {
+    live:{c:'#00A7DB',bg:'#E2F6FD',l:'Live'},
+    on:{c:'#0FA697',bg:'#E2F5F2',l:'On track'},
+    risk:{c:'#E0902A',bg:'#FBF0DC',l:'At risk'},
+    blocked:{c:'#E2455C',bg:'#FCE7EB',l:'Blocked'},
+    complete:{c:'#7A8694',bg:'#EEF1F4',l:'Complete'},
+    planned:{c:'#94A0AE',bg:'#F0F2F6',l:'Planned'},
+  },
+  DIV: { Chevrolet:'#2D6FE0', GMC:'#E2455C', Cadillac:'#7A5AF0', Buick:'#0FA697' },
+  TOOLS: [
+    {key:'smartsheet',name:'Smartsheet',mono:'ss',color:'#2D6FE0',role:'Timelines & tasks',base:142},
+    {key:'figma',name:'Figma',mono:'fig',color:'#B24BFF',role:'Design source',base:308},
+    {key:'clinch',name:'Clinch',mono:'cl',color:'#FF6A3D',role:'DCO engine',base:1284},
+    {key:'celtra',name:'Celtra',mono:'ce',color:'#0FB3A3',role:'Creative production',base:546},
+    {key:'pdf',name:'PDF Briefs',mono:'pdf',color:'#E2455C',role:'Imported plans',base:23},
+  ],
+  CAMPAIGNS: [
+    {id:'silv',name:'Silverado EV — Always-On',division:'Chevrolet',status:'live',owner:'M. Reyes',flights:[
+      {id:'silv-sus',name:'Summer Sustain',start:'2026-06-01',end:'2026-08-15',status:'live',channels:['CTV','Social','Display'],creatives:64},
+      {id:'silv-range',name:'Range Confidence',start:'2026-07-06',end:'2026-09-20',status:'on',channels:['OLV','Social'],creatives:38},
+    ]},
+    {id:'equ',name:'Equinox EV — Affordable EV',division:'Chevrolet',status:'on',owner:'T. Okafor',flights:[
+      {id:'equ-launch',name:'Launch Burst',start:'2026-06-15',end:'2026-07-26',status:'live',channels:['CTV','Social','Display','Audio'],creatives:88},
+      {id:'equ-coop',name:'Dealer Co-op',start:'2026-08-03',end:'2026-09-28',status:'planned',channels:['Display','Search'],creatives:120},
+    ]},
+    {id:'sierra',name:'GMC Sierra Denali — Q3 Launch',division:'GMC',status:'risk',owner:'L. Chen',flights:[
+      {id:'sierra-teaser',name:'Teaser',start:'2026-06-08',end:'2026-06-28',status:'complete',channels:['Social'],creatives:24},
+      {id:'sierra-reveal',name:'Reveal',start:'2026-07-01',end:'2026-08-16',status:'risk',channels:['CTV','OLV','Social','Display'],creatives:96},
+      {id:'sierra-drive',name:'Drive-to-Dealer',start:'2026-08-17',end:'2026-09-30',status:'planned',channels:['Search','Display','Social'],creatives:54},
+    ]},
+    {id:'lyriq',name:'Cadillac LYRIQ — Luxury EV',division:'Cadillac',status:'on',owner:'S. Patel',flights:[
+      {id:'lyriq-film',name:'Brand Film',start:'2026-06-01',end:'2026-07-12',status:'live',channels:['CTV','OLV'],creatives:30},
+      {id:'lyriq-conquest',name:'Conquest',start:'2026-07-20',end:'2026-09-27',status:'on',channels:['Social','Display','Search'],creatives:72},
+    ]},
+    {id:'envista',name:'Buick Envista — Regional Dealer',division:'Buick',status:'blocked',owner:'D. Morales',flights:[
+      {id:'env-se',name:'Southeast Region',start:'2026-07-06',end:'2026-08-02',status:'live',channels:['Display','Social'],creatives:42},
+      {id:'env-west',name:'West Region',start:'2026-08-10',end:'2026-09-21',status:'blocked',channels:['Display','Search','Social'],creatives:60},
+    ]},
+    {id:'eray',name:'Corvette E-Ray — Halo',division:'Chevrolet',status:'on',owner:'M. Reyes',flights:[
+      {id:'eray-track',name:'Track Days',start:'2026-07-13',end:'2026-08-30',status:'on',channels:['Social','OLV'],creatives:28},
+    ]},
+    {id:'blazer',name:'Blazer EV SS — Performance',division:'Chevrolet',status:'risk',owner:'T. Okafor',flights:[
+      {id:'blazer-sport',name:'Sport Launch',start:'2026-08-24',end:'2026-10-11',status:'risk',channels:['CTV','Social','Display'],creatives:70},
+    ]},
+    {id:'mday',name:'GM Memorial Day Event',division:'GMC',status:'complete',owner:'L. Chen',flights:[
+      {id:'mday-nat',name:'National Sales Event',start:'2026-06-01',end:'2026-06-09',status:'complete',channels:['Display','Search','Social'],creatives:46},
+    ]},
+  ],
+
+  IMPORTED: {id:'trax',name:'Chevrolet Trax — Back-to-School',division:'Chevrolet',status:'planned',owner:'T. Okafor',imported:true,flights:[
+    {id:'trax-aware',name:'Awareness',start:'2026-08-03',end:'2026-09-01',status:'planned',channels:['CTV','Social','Display'],creatives:30},
+    {id:'trax-conv',name:'Conversion',start:'2026-09-01',end:'2026-10-10',status:'planned',channels:['Display','Search','Social'],creatives:54},
+  ]},
+  WF_LANES: [
+    {key:'human',name:'HUMAN',color:'#00A7DB',desc:'Relationship-focused'},
+    {key:'craft',name:'CRAFT',color:'#7A5AF0',desc:'Value meets volume'},
+    {key:'delivery',name:'DELIVERY',color:'#0FA697',desc:'Seamless integration'},
+  ],
+  WF_PHASES: [
+    {key:'tier1',label:'Tier 1',sub:'National brand',boxes:{
+      human:[{id:'t1h1',title:'Kickoff & scoping',note:'Align objectives, audiences & KPIs'},{id:'t1h2',title:'Strategy alignment',note:'Brand strategy sign-off with GM'}],
+      craft:[{id:'t1c1',title:'Hero concepting',note:'Big-idea concepts & moodboards'},{id:'t1c2',title:'Master design',note:'Master frames built in Figma'}],
+      delivery:[{id:'t1d1',title:'DCO architecture',note:'Decision tree mapped in Clinch'},{id:'t1d2',title:'Trafficking plan',note:'Tagging & feed specification'}],
+    }},
+    {key:'tier2',label:'Tier 2',sub:'Regional & dealer',boxes:{
+      human:[{id:'t2h1',title:'Regional planning',note:'Market & dealer requirements'},{id:'t2h2',title:'Stakeholder review',note:'Regional approvals routed'}],
+      craft:[{id:'t2c1',title:'Localization',note:'Adapt master to markets & offers'},{id:'t2c2',title:'Sizing',note:'Full size set rendered in Celtra'}],
+      delivery:[{id:'t2d1',title:'Feed setup',note:'Inventory & offer feeds wired'},{id:'t2d2',title:'QA & publish',note:'Automated QA, then go live'}],
+    }},
+    {key:'social',label:'Tier Social',sub:'Social & community',boxes:{
+      human:[{id:'tsh1',title:'Social strategy',note:'Platform & creator approach'},{id:'tsh2',title:'Community brief',note:'Tone, moments & cadence'}],
+      craft:[{id:'tsc1',title:'Social-native craft',note:'Vertical, thumb-stopping builds'},{id:'tsc2',title:'Motion & cutdowns',note:'Edits & variants per platform'}],
+      delivery:[{id:'tsd1',title:'Channel publish',note:'Schedule & native publishing'},{id:'tsd2',title:'Optimize & report',note:'Performance loop & insights'}],
+    }},
+  ],
+  WF_ROLES: {
+    human:[{name:'Account Lead',resp:'Owns the GM relationship & scope',tool:'Smartsheet'},{name:'Brand Strategist',resp:'Translates the brief into strategy',tool:'PDF brief'},{name:'Project Manager',resp:'Drives the timeline & approvals',tool:'Smartsheet'}],
+    craft:[{name:'Creative Director',resp:'Sets and holds the creative bar',tool:'Figma'},{name:'Art Director',resp:'Designs the master & systems',tool:'Figma'},{name:'Designer',resp:'Builds & adapts every asset',tool:'Figma'},{name:'Motion Designer',resp:'Cutdowns, motion & variants',tool:'Celtra'}],
+    delivery:[{name:'Ad Ops Lead',resp:'Owns trafficking & delivery',tool:'Clinch'},{name:'DCO Engineer',resp:'Builds dynamic logic & feeds',tool:'Clinch'},{name:'QA Specialist',resp:'Validates every variant & size',tool:'Celtra'}],
+  },
+  WF_INTAKE_ROLES: [{name:'GM MAS',resp:'Issues the activation brief',tool:'PDF brief'},{name:'Account Lead',resp:'Receives & qualifies the brief',tool:'Smartsheet'}],
+
+  allCampaigns(){ return this.state.added ? this.CAMPAIGNS.concat([this.IMPORTED]) : this.CAMPAIGNS; },
+  findCampaign(id){ return this.allCampaigns().find(c => c.id === id); },
+  findFlight(id){ for(const c of this.allCampaigns()){ const f = c.flights.find(x => x.id === id); if(f) return {f, c}; } return null; },
+
+  setRole(r){ this.setState({role:r}); },
+  goOverview(){ this.setState({screen:'overview',campaignId:null,flightId:null}); },
+  goCalendar(){ this.setState({screen:'calendar',campaignId:null,flightId:null}); },
+  openCampaign(id){ this.setState({screen:'campaign',campaignId:id,flightId:null}); },
+  openFlight(id){ const r = this.findFlight(id); this.setState({screen:'creative',campaignId:r?r.c.id:null,flightId:id}); },
+  back(){ const s = this.state; if(s.screen==='creative') this.setState({screen:'campaign',flightId:null}); else if(s.screen==='campaign') this.setState({screen:'calendar',campaignId:null}); else this.setState({screen:'overview'}); },
+  openPdf(){ this.setState({pdfOpen:true,pdfStep:0,pdfReveal:0}); },
+  closePdf(){ clearInterval(this._pt); this.setState({pdfOpen:false,pdfStep:0,pdfReveal:0}); },
+  parseBrief(){ this.setState({pdfStep:1,pdfReveal:0}); clearInterval(this._pt);
+    this._pt = setInterval(() => { this.setState(s => { if(s.pdfReveal>=7){ clearInterval(this._pt); return {pdfStep:2}; } return {pdfReveal:s.pdfReveal+1}; }); }, 360); },
+  addToCalendar(){ clearInterval(this._pt); this.setState({added:true,pdfOpen:false,pdfStep:0,screen:'calendar',filter:'all',addedId:'trax'}); },
+  goWorkflow(){ this.setState({screen:'workflow',campaignId:null,flightId:null,wfSel:null}); },
+  openStep(sel){ this.setState({wfSel:sel}); },
+  closeStep(){ this.setState({wfSel:null}); },
+
+  buildCampaignDetail(c){
+    const ST = this.ST, DIV = this.DIV; const today = this.D('2026-06-11');
+    const starts = c.flights.map(f => this.D(f.start)), ends = c.flights.map(f => this.D(f.end));
+    const s = new Date(Math.min.apply(null,starts)), e = new Date(Math.max.apply(null,ends));
+    const fmt = (d) => d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const chans = [...new Set(c.flights.reduce((a,f) => a.concat(f.channels),[]))];
+    const creatives = c.flights.reduce((n,f) => n+f.creatives,0);
+    const onTime = {live:'95%',on:'96%',risk:'78%',blocked:'64%',complete:'100%'}[c.status]||'90%';
+    const st = ST[c.status];
+    const flights = c.flights.map(f => { const fs = this.D(f.start), fe = this.D(f.end); let p = Math.round((today-fs)/(fe-fs)*100); p = Math.max(0,Math.min(100,p)); if(f.status==='complete') p = 100; const fst = ST[f.status];
+      return {name:f.name,creatives:String(f.creatives),channels:f.channels,
+        statusStyle:{background:fst.bg,color:fst.c,fontSize:'11px',fontWeight:800,padding:'3px 11px',borderRadius:'999px',whiteSpace:'nowrap'},statusLabel:fst.l,
+        dateRange:fmt(fs)+' – '+fmt(fe), pctLabel:p+'%',
+        barFill:{width:p+'%',height:'100%',background:fst.c,borderRadius:'4px'},
+        onClick:() => this.openFlight(f.id)};
+    });
+    const taskPool = [
+      {title:'Final media plan sign-off',assignee:'GM Brand',who:'GM'},
+      {title:'Hero film color grade',assignee:'Post team',who:'RT'},
+      {title:'Localize dealer end-cards',assignee:'Studio',who:'RT'},
+      {title:'Traffic Clinch DCO feeds',assignee:'Ad ops',who:'RT'},
+      {title:'Legal review — EV disclaimers',assignee:'Legal',who:'GM'},
+      {title:'Celtra size QA pass',assignee:'QA',who:'RT'},
+    ];
+    const tstat = ['done','done','active','active','blocked','active'];
+    const tmap = {done:{l:'Done',c:'#0FA697',bg:'#E2F5F2'},active:{l:'In progress',c:'#00A7DB',bg:'#E2F6FD'},blocked:{l:'Blocked',c:'#E2455C',bg:'#FCE7EB'}};
+    const tasks = taskPool.map((t,i) => { let stt = tstat[i]; if(c.status==='complete') stt = 'done'; if(c.status==='blocked'&&i===4) stt = 'blocked'; const m = tmap[stt];
+      return {title:t.title,assignee:t.assignee,due:['Jun 14','Jun 18','Jun 22','Jun 25','Jun 12','Jun 28'][i],
+        avatar:t.who, avatarStyle:{width:'22px',height:'22px',borderRadius:'50%',background:t.who==='GM'?'#00BCF2':'#1B1E23',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'9px',fontWeight:800,flexShrink:'0'},
+        statusStyle:{background:m.bg,color:m.c,fontSize:'10.5px',fontWeight:800,padding:'3px 9px',borderRadius:'999px',whiteSpace:'nowrap'},statusLabel:m.l};
+    });
+    const sources = [{name:'Smartsheet',color:'#2D6FE0',label:'Project plan',mono:'ss'},{name:'Figma',color:'#B24BFF',label:'Design library',mono:'fig'},{name:'Clinch',color:'#FF6A3D',label:'DCO feeds',mono:'cl'},{name:'Celtra',color:'#0FB3A3',label:'Ad units',mono:'ce'}]
+      .map(x => ({name:x.name,label:x.label,mono:x.mono,chipStyle:{width:'30px',height:'30px',borderRadius:'8px',background:x.color+'1A',color:x.color,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'9.5px',textTransform:'uppercase',flexShrink:'0'}}));
+    const activity = [{who:'Clinch',text:'Generated 18 new variants for '+c.flights[0].name,time:'12m ago',color:'#FF6A3D'},{who:'Figma',text:'Master frames updated by '+c.owner,time:'1h ago',color:'#B24BFF'},{who:'Smartsheet',text:'2 tasks moved to In progress',time:'3h ago',color:'#2D6FE0'},{who:'Celtra',text:'42 ad units exported to QA',time:'5h ago',color:'#0FB3A3'}]
+      .map(a => ({who:a.who,text:a.text,time:a.time,dotStyle:{width:'8px',height:'8px',borderRadius:'50%',background:a.color,marginTop:'5px',flexShrink:'0'}}));
+    return {name:c.name,division:c.division,owner:c.owner,dateRange:fmt(s)+' – '+fmt(e)+', 2026',
+      divStyle:{width:'13px',height:'13px',borderRadius:'50%',background:DIV[c.division],flexShrink:'0'},
+      statusStyle:{background:st.bg,color:st.c,fontSize:'12.5px',fontWeight:800,padding:'5px 13px',borderRadius:'999px'},statusLabel:st.l,
+      channels:chans,
+      stats:[{label:'Flights',value:String(c.flights.length)},{label:'Creatives',value:String(creatives)},{label:'On-time',value:onTime},{label:'Channels',value:String(chans.length)}],
+      flights,tasks,sources,activity};
+  },
+
+  buildCreativeDetail(id){
+    const r = this.findFlight(id); if(!r) return null; const f = r.f, c = r.c; const ST = this.ST;
+    const audiences = ['In-Market EV','Truck Loyalist','Conquest Luxury'];
+    const regions = ['National','Northeast','Southeast','West'];
+    const stripes = 'repeating-linear-gradient(135deg,#EDF0F3 0,#EDF0F3 9px,#E4E8ED 9px,#E4E8ED 18px)';
+    const statuses = ['live','live','on','live','risk','live','live','on','live','live','planned','live'];
+    const sizeLabels = ['1080×1080','1080×1920','300×250','728×90'];
+    let idx = 0; const variants = [];
+    audiences.forEach(a => regions.forEach(rg => { const stt = ST[statuses[idx%statuses.length]]; const sizeN = 6+(idx%4);
+      variants.push({audience:a,region:rg,
+        thumbStyle:{height:'118px',borderRadius:'11px 11px 0 0',background:stripes,display:'flex',alignItems:'center',justifyContent:'center',borderBottom:'1px solid #E7EBEF'},
+        sizeLabel:sizeLabels[idx%4],
+        statusStyle:{background:stt.bg,color:stt.c,fontSize:'10px',fontWeight:800,padding:'2px 8px',borderRadius:'999px',whiteSpace:'nowrap'},statusLabel:stt.l,
+        sizes:sizeN+' sizes',clinch:'CL-'+(1480+idx)});
+      idx++;
+    }));
+    const liveN = variants.filter(v => v.statusLabel==='Live').length;
+    const sizeTotal = variants.reduce((n,v) => n+parseInt(v.sizes),0);
+    return {flightName:f.name,campaignName:c.name,channels:f.channels.join(' · '),
+      conceptName:f.name+' — Master concept',
+      summary:'1 concept  →  '+variants.length+' variants  →  '+sizeTotal+' sizes',
+      stats:[{label:'Variants',value:String(variants.length)},{label:'Celtra sizes',value:String(sizeTotal)},{label:'Live now',value:String(liveN)},{label:'Audiences',value:String(audiences.length)}],
+      variants};
+  },
+
+  renderVals(){
+    const S = this.state, ST = this.ST, DIV = this.DIV;
+    const cams = this.allCampaigns();
+    const tone = {cyan:'#00A7DB',good:'#0FA697',bad:'#E2455C'};
+
+    // ---- chrome ----
+    const navBase = {width:'52px',height:'44px',display:'flex',alignItems:'center',justifyContent:'center',border:'none',borderRadius:'12px',cursor:'pointer',background:'transparent',color:'#7A8694'};
+    const homeOn = S.screen==='overview';
+    const calOn = ['calendar','campaign','creative'].includes(S.screen);
+    const navHomeStyle = Object.assign({},navBase,homeOn?{background:'#1B1E23',color:'#00BCF2'}:{});
+    const navCalStyle = Object.assign({},navBase,calOn?{background:'#1B1E23',color:'#00BCF2'}:{});
+    const wfOn = S.screen==='workflow';
+    const navWfStyle = Object.assign({},navBase,wfOn?{background:'#1B1E23',color:'#00BCF2'}:{});
+    const avTxt = {exec:'EX',account:'AC',producer:'PR'}[S.role];
+    const roleAvatar = {text:avTxt,style:{width:'40px',height:'40px',borderRadius:'50%',background:'#1B1E23',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'12px',letterSpacing:'.03em',border:'2px solid #2A2E35'}};
+
+    const roleInfo = {exec:{label:'Executive',ctx:'Portfolio health across all GM divisions'},account:{label:'Account',ctx:'Client deliverables & GM sign-offs'},producer:{label:'Producer',ctx:'Tasks, approvals & production QA'}};
+    const roles = ['exec','account','producer'].map(k => ({key:k,label:roleInfo[k].label,
+      style:Object.assign({padding:'7px 14px',borderRadius:'8px',border:'none',cursor:'pointer',fontWeight:700,fontSize:'12.5px',letterSpacing:'.005em'},
+        S.role===k?{background:'#0B0D10',color:'#fff'}:{background:'transparent',color:'#67727F'}),
+      onClick:() => this.setRole(k)}));
+
+    // ---- breadcrumbs ----
+    let crumbsRaw = [{label:'Overview',go:() => this.goOverview()}];
+    if(S.screen==='overview') crumbsRaw = [{label:'Overview'}];
+    if(S.screen==='workflow') crumbsRaw = [{label:'Overview',go:() => this.goOverview()},{label:'Workflow'}];
+    if(S.screen==='calendar') crumbsRaw = [{label:'Overview',go:() => this.goOverview()},{label:'Marketing calendar'}];
+    if(S.screen==='campaign'||S.screen==='creative'){ const c = this.findCampaign(S.campaignId);
+      crumbsRaw = [{label:'Overview',go:() => this.goOverview()},{label:'Calendar',go:() => this.goCalendar()},{label:c?c.name:'Campaign',go:S.screen==='creative'?(() => this.openCampaign(S.campaignId)):null}];
+      if(S.screen==='creative'){ const r = this.findFlight(S.flightId); crumbsRaw.push({label:r?r.f.name:'Flight'}); }
+    }
+    const crumbs = crumbsRaw.map((c,i) => ({label:c.label,sep:i?'/':'',onClick:c.go||null,
+      style:{border:'none',background:'none',padding:'0',cursor:c.go?'pointer':'default',fontSize:'13.5px',fontWeight:c.go?600:800,letterSpacing:'-.01em',color:c.go?'#7A8694':'#0B0D10',whiteSpace:'nowrap',maxWidth:'240px',overflow:'hidden',textOverflow:'ellipsis'}}));
+
+    // ---- KPIs ----
+    const liveFlights = cams.reduce((n,c) => n+c.flights.filter(f => f.status==='live').length,0);
+    const activeN = cams.filter(c => c.status!=='complete').length;
+    const KPI = {
+      exec:[
+        {label:'Active campaigns',value:String(activeN),sub:'across 4 divisions',trend:'+2 QoQ',tone:'cyan'},
+        {label:'Flights live',value:String(liveFlights),sub:'14 total scheduled',tone:'cyan',trend:'on pace'},
+        {label:'On-time delivery',value:'92%',sub:'last 90 days',trend:'▲ 4 pts',tone:'good'},
+        {label:'Portfolio at-risk',value:'3',sub:'2 risk · 1 blocked',trend:'review',tone:'bad'},
+      ],
+      account:[
+        {label:'Awaiting GM sign-off',value:'3',sub:'2 due today',trend:'escalate',tone:'bad'},
+        {label:'Approvals due · 7d',value:'5',sub:'client review',trend:'on track',tone:'cyan'},
+        {label:'Deliverables this week',value:'22',sub:'18 shipped',trend:'82%',tone:'good'},
+        {label:'On-time delivery',value:'92%',sub:'last 90 days',trend:'▲ 4 pts',tone:'good'},
+      ],
+      producer:[
+        {label:'My tasks due',value:'11',sub:'4 today',trend:'2 overdue',tone:'bad'},
+        {label:'Approvals pending',value:'7',sub:'Figma + Celtra',trend:'review',tone:'cyan'},
+        {label:'Assets in QA',value:'34',sub:'across 6 flights',trend:'▲ 12',tone:'cyan'},
+        {label:'Behind schedule',value:'4',sub:'flights slipping',trend:'mitigate',tone:'bad'},
+      ],
+    };
+    const kpis = KPI[S.role].map(k => ({label:k.label,value:k.value,sub:k.sub,trend:k.trend,
+      accentStyle:{position:'absolute',left:'0',top:'0',bottom:'0',width:'4px',background:tone[k.tone]},
+      trendStyle:{fontSize:'12px',fontWeight:800,color:tone[k.tone],whiteSpace:'nowrap'}}));
+
+    // ---- health ----
+    const order = ['live','on','risk','blocked','complete'];
+    const counts = {}; cams.forEach(c => counts[c.status] = (counts[c.status]||0)+1);
+    const healthSegs = order.filter(k => counts[k]).map(k => ({style:{flex:String(counts[k]),background:ST[k].c},
+      dotStyle:{width:'9px',height:'9px',borderRadius:'3px',background:ST[k].c,display:'inline-block'},label:ST[k].l,count:counts[k]}));
+
+    // ---- watchlist ----
+    const sev = {blocked:0,risk:1,live:2,on:3,planned:4,complete:5};
+    const today = this.D('2026-06-11');
+    const watch = [...cams].sort((a,b) => sev[a.status]-sev[b.status]).slice(0,5).map(c => {
+      const ss = c.flights.map(f => this.D(f.start)), ee = c.flights.map(f => this.D(f.end));
+      const s = Math.min.apply(null,ss), e = Math.max.apply(null,ee);
+      let p = Math.round((today-s)/(e-s)*100); p = Math.max(4,Math.min(100,p));
+      const st = ST[c.status];
+      return {id:c.id,name:c.name,division:c.division,flightsLabel:c.flights.length+' flights',
+        divStyle:{width:'10px',height:'10px',borderRadius:'50%',background:DIV[c.division],flexShrink:'0'},
+        statusStyle:{background:st.bg,color:st.c,fontSize:'11px',fontWeight:800,padding:'3px 9px',borderRadius:'999px',whiteSpace:'nowrap',flexShrink:'0'},
+        statusLabel:st.l,pctLabel:p+'%',barFill:{width:p+'%',height:'100%',background:st.c,borderRadius:'4px'},
+        onClick:() => this.openCampaign(c.id)};
+    });
+
+    // ---- tools rail (live) ----
+    const lasts = ['just now','1m ago','3m ago','just now','5m ago'];
+    const tools = this.TOOLS.map((t,i) => { const syncing = ((S.tick+i)%5===0); const count = t.base+((S.tick*7+i*13)%40);
+      return {name:t.name,mono:t.mono,role:t.role,countLabel:count.toLocaleString(),
+        monoStyle:{width:'36px',height:'36px',borderRadius:'10px',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'11px',textTransform:'uppercase',letterSpacing:'.02em',background:t.color+'1A',color:t.color,flexShrink:'0'},
+        dotStyle:Object.assign({width:'7px',height:'7px',borderRadius:'50%',display:'inline-block',background:syncing?t.color:'#C4CCD6'},syncing?{animation:'pulse 1.4s infinite'}:{}),
+        last:syncing?'syncing…':lasts[i]};
+    });
+
+    // ---- alerts ----
+    const alertsRaw = [
+      {sev:'blocked',title:'Envista West Region blocked',detail:'Legal approval overdue 2 days in Smartsheet — 60 assets paused.',tool:'Smartsheet',cid:'envista'},
+      {sev:'risk',title:'Sierra Denali Reveal at risk',detail:'12 Celtra sizes behind QA for the Jul 1 launch.',tool:'Celtra',cid:'sierra'},
+      {sev:'risk',title:'Blazer EV SS sport launch',detail:'Clinch feed mapping incomplete for 18 variants.',tool:'Clinch',cid:'blazer'},
+      {sev:'live',title:'Equinox Launch Burst is live',detail:'88 creatives trafficked across CTV, Social & Display.',tool:'Clinch',cid:'equ'},
+    ];
+    const alerts = alertsRaw.map(a => { const st = ST[a.sev];
+      return {title:a.title,detail:a.detail,tool:a.tool,
+        dotStyle:{width:'9px',height:'9px',borderRadius:'50%',background:st.c,marginTop:'4px',flexShrink:'0'},
+        sevStyle:{background:st.bg,color:st.c,fontSize:'11px',fontWeight:800,padding:'3px 9px',borderRadius:'999px'},
+        onClick:() => this.openCampaign(a.cid)};
+    });
+
+    // ---- calendar geometry ----
+    const spanStart = this.D('2026-06-01'), spanEnd = this.D('2026-10-12'); const span = spanEnd-spanStart;
+    const pct = (d) => (this.D(d)-spanStart)/span*100;
+    const weeks = []; let t = new Date(spanStart);
+    while(t<=spanEnd){ const l = (t-spanStart)/span*100;
+      weeks.push({label:(t.getMonth()+1)+'/'+t.getDate(),
+        labelStyle:{position:'absolute',left:l+'%',top:'34px',transform:'translateX(-50%)',fontSize:'10px',color:'#9AA4B0',fontWeight:600,whiteSpace:'nowrap'},
+        lineStyle:{position:'absolute',top:'0',bottom:'0',left:l+'%',width:'1px',background:'#EEF1F4'}});
+      t = new Date(t.getTime()+7*864e5);
+    }
+    const months = []; let m = new Date(spanStart.getFullYear(),spanStart.getMonth(),1);
+    while(m<=spanEnd){ const next = new Date(m.getFullYear(),m.getMonth()+1,1);
+      const s = Math.max(m,spanStart), e = Math.min(next,spanEnd); const left = (s-spanStart)/span*100, width = (e-s)/span*100;
+      months.push({name:m.toLocaleString('en-US',{month:'long'}),
+        style:{position:'absolute',left:left+'%',width:width+'%',top:'9px',paddingLeft:'8px',fontSize:'12.5px',fontWeight:800,letterSpacing:'-.01em',color:'#0B0D10',borderLeft:'1px solid #E7EBEF',height:'18px',display:'flex',alignItems:'center'}});
+      m = next;
+    }
+    const todayPct = (today-spanStart)/span*100;
+    const todayLineStyle = {position:'absolute',top:'0',bottom:'0',left:todayPct+'%',width:'2px',background:'#00BCF2',zIndex:'2'};
+    const todayPillStyle = {position:'absolute',left:todayPct+'%',top:'5px',transform:'translateX(-50%)',background:'#00BCF2',color:'#04222B',fontSize:'9.5px',fontWeight:900,letterSpacing:'.04em',padding:'2px 7px',borderRadius:'999px',whiteSpace:'nowrap',zIndex:'3'};
+
+    const calRows = cams.filter(c => S.filter==='all'||c.division===S.filter).map(c => {
+      const rowH = 18+c.flights.length*34;
+      const isNew = (c.id===S.addedId);
+      const flights = c.flights.map((f,i) => { const l = pct(f.start), r = pct(f.end), w = Math.max(r-l,2.2); const st = ST[f.status];
+        return {id:f.id,label:f.name,channels:f.channels.join(' · '),
+          barStyle:{position:'absolute',left:l+'%',width:w+'%',top:(14+i*34)+'px',height:'26px',background:st.c,borderRadius:'7px',cursor:'pointer',display:'flex',alignItems:'center',padding:'0 10px',overflow:'hidden',zIndex:'1',boxShadow:'0 1px 2px rgba(11,13,16,.12)'},
+          onClick:() => this.openFlight(f.id)};
+      });
+      const st = ST[c.status];
+      const toolColors = ['#2D6FE0','#B24BFF','#FF6A3D','#0FB3A3'];
+      return {id:c.id,name:c.name,owner:c.owner,isNew,newBadge:isNew?{display:'inline-block',background:'#00BCF2',color:'#04222B',fontSize:'8.5px',fontWeight:900,letterSpacing:'.04em',padding:'2px 6px',borderRadius:'5px',marginLeft:'7px'}:{display:'none'},
+        divStyle:{width:'10px',height:'10px',borderRadius:'50%',background:DIV[c.division],flexShrink:'0'},
+        statusStyle:{background:st.bg,color:st.c,fontSize:'10.5px',fontWeight:800,padding:'2px 8px',borderRadius:'999px',whiteSpace:'nowrap'},
+        statusLabel:st.l,
+        toolDots:toolColors.map(col => ({style:{width:'6px',height:'6px',borderRadius:'50%',background:col,display:'inline-block'}})),
+        labelCellStyle:{height:rowH+'px',padding:'0 16px',borderBottom:'1px solid #F1F3F6',display:'flex',flexDirection:'column',justifyContent:'center',gap:'8px',cursor:'pointer',background:isNew?'#ECFAFF':'transparent'},
+        trackRowStyle:{position:'relative',height:rowH+'px',borderBottom:'1px solid #F1F3F6',background:isNew?'#F4FCFF':'transparent'},
+        flights,onClick:() => this.openCampaign(c.id)};
+    });
+
+    const filters = ['all','Chevrolet','GMC','Cadillac','Buick'].map(d => ({label:d==='all'?'All divisions':d,
+      style:Object.assign({padding:'7px 14px',borderRadius:'999px',border:'1px solid',cursor:'pointer',fontWeight:600,fontSize:'12.5px'},
+        S.filter===d?{background:'#0B0D10',borderColor:'#0B0D10',color:'#fff'}:{background:'#fff',borderColor:'#E2E6EB',color:'#5A6470'}),
+      onClick:() => this.setState({filter:d})}));
+    const legend = order.map(k => ({label:ST[k].l,style:{width:'10px',height:'10px',borderRadius:'3px',background:ST[k].c,display:'inline-block'}}));
+
+    // ---- workflow ----
+    const isWorkflow = S.screen==='workflow';
+    const wfLegend = this.WF_LANES.map(ln => ({name:ln.name,desc:ln.desc,dotStyle:{width:'10px',height:'10px',borderRadius:'3px',background:ln.color},nameStyle:{fontSize:'11px',fontWeight:'900',letterSpacing:'.06em',color:ln.color}}));
+    const wfPhases = this.WF_PHASES.map((p,pi) => ({num:String(pi+1).padStart(2,'0'),label:p.label,sub:p.sub,
+      lanes:this.WF_LANES.map(ln => ({name:ln.name,desc:ln.desc,
+        nameStyle:{fontSize:'11px',fontWeight:'900',letterSpacing:'.07em',color:ln.color},
+        barStyle:{height:'3px',borderRadius:'2px',background:ln.color,margin:'9px 0 2px'},
+        boxes:(p.boxes[ln.key]||[]).map(b => ({title:b.title,note:b.note,
+          boxStyle:{background:'#fff',border:'1px solid #E7EBEF',borderLeft:'3px solid '+ln.color,borderRadius:'11px',padding:'13px 14px',cursor:'pointer',marginTop:'10px'},
+          linkStyle:{color:ln.color,fontSize:'11px',fontWeight:'800',marginTop:'9px'},
+          onClick:() => this.openStep({phase:p.label,laneName:ln.name,laneKey:ln.key,color:ln.color,title:b.title})}))
+      }))
+    }));
+    const intakeOnClick = () => this.openStep({phase:'Intake',laneName:'GM MAS',laneKey:'intake',color:'#00A7DB',title:'Brief from GM MAS'});
+    let wfPanel = null;
+    if(S.wfSel){ const sel = S.wfSel; const roles = (sel.laneKey==='intake')?this.WF_INTAKE_ROLES:(this.WF_ROLES[sel.laneKey]||[]);
+      wfPanel = {title:sel.title,phase:sel.phase,laneName:sel.laneName,
+        tagStyle:{background:sel.color+'1A',color:sel.color,fontSize:'11px',fontWeight:'800',padding:'4px 11px',borderRadius:'999px',letterSpacing:'.04em'},
+        roles:roles.map(r => ({name:r.name,resp:r.resp,tool:r.tool,
+          avatarStyle:{width:'34px',height:'34px',borderRadius:'50%',background:sel.color,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:'800',flexShrink:'0'},
+          initials:r.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()}))};
+    }
+    const wfOpen = !!S.wfSel;
+
+    const cc = this.findCampaign(S.campaignId); const fr = this.findFlight(S.flightId);
+    const cd = (S.screen==='campaign'&&cc)?this.buildCampaignDetail(cc):null;
+    const cr = (S.screen==='creative')?this.buildCreativeDetail(S.flightId):null;
+
+    // ---- PDF import ----
+    const pfRows = [
+      {label:'Campaign',value:'Chevrolet Trax — Back-to-School'},
+      {label:'Division',value:'Chevrolet'},
+      {label:'Flight window',value:'Aug 3 – Oct 10, 2026'},
+      {label:'Flights detected',value:'2 · Awareness, Conversion'},
+      {label:'Channels',value:'CTV · Social · Display · Search'},
+      {label:'Working budget',value:'$2.8M'},
+      {label:'Primary audience',value:'In-market compact SUV'},
+    ];
+    const pdfFields = pfRows.map((r,i) => { const on = i<S.pdfReveal;
+      return {label:r.label,value:r.value,
+        rowStyle:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'14px',padding:'9px 0',borderBottom:'1px solid #F1F3F6',opacity:on?'1':'.28'},
+        checkStyle:{width:'17px',height:'17px',borderRadius:'50%',flexShrink:'0',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'10px',fontWeight:900,background:on?'#E2F6FD':'#F0F2F5',color:on?'#00A7DB':'#C4CCD6'},
+        check:on?'✓':'·'};
+    });
+    const pdfProgressStyle = {width:(Math.min(S.pdfReveal,7)/7*100)+'%',height:'100%',background:'#00BCF2',borderRadius:'999px'};
+    const pdfScanStyle = {position:'absolute',left:'10px',right:'10px',height:'2px',background:'#00BCF2',boxShadow:'0 0 10px 1px rgba(0,188,242,.6)',top:(12+Math.min(S.pdfReveal,7)/7*72)+'%',zIndex:'2'};
+    const pdfNewFlights = this.IMPORTED.flights.map(f => { const fs = this.D(f.start), fe = this.D(f.end); const fmt = (d) => d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      return {name:f.name,dateRange:fmt(fs)+' – '+fmt(fe),channels:f.channels.join(' · '),creatives:f.creatives+' creatives'}; });
+
+    return {
+      navHomeStyle,navCalStyle,roleAvatar,roles,crumbs,
+      goOverview:() => this.goOverview(),goCalendar:() => this.goCalendar(),openPdf:() => this.openPdf(),closePdf:() => this.closePdf(),back:() => this.back(),
+      isOverview:S.screen==='overview',isCalendar:S.screen==='calendar',isCampaign:S.screen==='campaign',isCreative:S.screen==='creative',
+      roleContext:roleInfo[S.role].ctx,
+      kpis,healthSegs,watch,tools,alerts,
+      filters,legend,weeks,months,todayLineStyle,todayPillStyle,calRows,
+      campaignName:cc?cc.name:'',flightName:fr?fr.f.name:'',
+      pdfOpen:S.pdfOpen,cd,cr,
+      pdfStep0:S.pdfStep===0,pdfStep1:S.pdfStep===1,pdfStep2:S.pdfStep===2,
+      pdfFields,pdfProgressStyle,pdfScanStyle,pdfNewFlights,
+      parseBrief:() => this.parseBrief(),addToCalendar:() => this.addToCalendar(),
+      isWorkflow,navWfStyle,goWorkflow:() => this.goWorkflow(),wfLegend,wfPhases,intakeOnClick,wfPanel,wfOpen,
+      closeStep:() => this.closeStep(),wfStop:(e) => { if(e&&e.stopPropagation) e.stopPropagation(); },
+    };
+  }
+};
+
+/* ---------- SVG icons ---------- */
+const ICON_HOME = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.6"></rect><rect x="14" y="3" width="7" height="7" rx="1.6"></rect><rect x="3" y="14" width="7" height="7" rx="1.6"></rect><rect x="14" y="14" width="7" height="7" rx="1.6"></rect></svg>';
+const ICON_CAL = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4.5" width="18" height="16.5" rx="2.2"></rect><line x1="3" y1="9.5" x2="21" y2="9.5"></line><line x1="8" y1="2.5" x2="8" y2="6.5"></line><line x1="16" y1="2.5" x2="16" y2="6.5"></line></svg>';
+const ICON_WF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="2.4"></circle><circle cx="5.5" cy="18.5" r="2.4"></circle><circle cx="18.5" cy="18.5" r="2.4"></circle><path d="M12 7.4v3.2M5.5 16.1v-2a1.5 1.5 0 0 1 1.5-1.5h10a1.5 1.5 0 0 1 1.5 1.5v2"></path></svg>';
+const ICON_PLUS = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"></path></svg>';
+
+/* ---------- view templates ---------- */
+function viewOverview(V){
+  return `
+  <div style="max-width:1320px;margin:0 auto;">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:22px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:#9AA4B0;letter-spacing:.02em;margin-bottom:5px;">Thursday · June 11, 2026</div>
+        <h1 style="font-size:30px;font-weight:800;letter-spacing:-.03em;margin:0;">Good morning, Alex</h1>
+        <div style="font-size:14.5px;color:#67727F;margin-top:4px;">${esc(V.roleContext)}</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px;">
+      ${V.kpis.map(k => `
+        <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:18px 20px;position:relative;overflow:hidden;">
+          <div style="${css(k.accentStyle)}"></div>
+          <div style="font-size:12.5px;font-weight:600;color:#6B7682;">${esc(k.label)}</div>
+          <div style="font-size:40px;font-weight:800;letter-spacing:-.035em;margin:7px 0 3px;line-height:1;">${esc(k.value)}</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+            <span style="font-size:12.5px;color:#8893A0;">${esc(k.sub)}</span>
+            <span style="${css(k.trendStyle)}">${esc(k.trend)}</span>
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start;">
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:20px 22px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h3 style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0;">Portfolio health</h3>
+            <span style="font-size:12px;font-weight:600;color:#9AA4B0;">8 campaigns · 14 flights</span>
+          </div>
+          <div style="display:flex;height:14px;border-radius:8px;overflow:hidden;gap:2px;">
+            ${V.healthSegs.map(h => `<div style="${css(h.style)}"></div>`).join('')}
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:18px;margin-top:14px;">
+            ${V.healthSegs.map(h => `
+              <div style="display:flex;align-items:center;gap:7px;">
+                <span style="${css(h.dotStyle)}"></span>
+                <span style="font-size:12.5px;color:#5A6470;font-weight:600;">${esc(h.label)}</span>
+                <span style="font-size:12.5px;color:#0B0D10;font-weight:800;">${esc(h.count)}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:20px 22px 8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <h3 style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0;">Needs attention</h3>
+            <button data-click="${reg(V.goCalendar)}" style="border:none;background:none;color:#00A7DB;font-weight:700;font-size:12.5px;cursor:pointer;">Open calendar →</button>
+          </div>
+          ${V.watch.map(w => `
+            <div data-click="${reg(w.onClick)}" style="display:flex;align-items:center;gap:14px;padding:13px 6px;border-bottom:1px solid #F1F3F6;cursor:pointer;">
+              <span style="${css(w.divStyle)}"></span>
+              <div style="flex:0 0 230px;min-width:0;">
+                <div style="font-size:13.5px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(w.name)}</div>
+                <div style="font-size:11.5px;color:#9AA4B0;margin-top:2px;">${esc(w.division)} · ${esc(w.flightsLabel)}</div>
+              </div>
+              <span style="${css(w.statusStyle)}">${esc(w.statusLabel)}</span>
+              <div style="flex:1;display:flex;align-items:center;gap:10px;min-width:0;">
+                <div style="flex:1;height:6px;border-radius:4px;background:#EEF1F4;overflow:hidden;"><div style="${css(w.barFill)}"></div></div>
+                <span style="font-size:12px;font-weight:700;color:#67727F;width:34px;text-align:right;">${esc(w.pctLabel)}</span>
+              </div>
+              <span style="color:#C4CCD6;font-size:16px;">›</span>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:20px 22px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <h3 style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0;">Connected sources</h3>
+            <span style="font-size:11px;font-weight:800;color:#0FA697;background:#E2F5F2;padding:3px 8px;border-radius:999px;letter-spacing:.04em;">LIVE</span>
+          </div>
+          ${V.tools.map(t => `
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #F1F3F6;">
+              <div style="${css(t.monoStyle)}">${esc(t.mono)}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13.5px;font-weight:700;letter-spacing:-.01em;">${esc(t.name)}</div>
+                <div style="font-size:11.5px;color:#9AA4B0;">${esc(t.role)}</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:14px;font-weight:800;letter-spacing:-.02em;">${esc(t.countLabel)}</div>
+                <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end;margin-top:1px;">
+                  <span style="${css(t.dotStyle)}"></span>
+                  <span style="font-size:11px;color:#9AA4B0;font-weight:600;">${esc(t.last)}</span>
+                </div>
+              </div>
+            </div>`).join('')}
+        </div>
+
+        <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:20px 22px 10px;">
+          <h3 style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0 0 6px;">Alerts</h3>
+          ${V.alerts.map(a => `
+            <div data-click="${reg(a.onClick)}" style="display:flex;gap:12px;padding:13px 0;border-bottom:1px solid #F1F3F6;cursor:pointer;">
+              <span style="${css(a.dotStyle)}"></span>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:700;letter-spacing:-.01em;margin-bottom:3px;">${esc(a.title)}</div>
+                <div style="font-size:12px;color:#7A8694;line-height:1.45;">${esc(a.detail)}</div>
+                <div style="margin-top:7px;"><span style="${css(a.sevStyle)}">${esc(a.tool)}</span></div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function viewCalendar(V){
+  return `
+  <div style="max-width:1480px;margin:0 auto;">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:18px;">
+      <div>
+        <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0;">Integrated marketing calendar</h1>
+        <div style="font-size:13.5px;color:#67727F;margin-top:3px;">Every campaign, flight & source in one timeline · Jun – Oct 2026</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;">
+        <div style="display:flex;flex-wrap:wrap;gap:14px;">
+          ${V.legend.map(l => `<div style="display:flex;align-items:center;gap:6px;"><span style="${css(l.style)}"></span><span style="font-size:11.5px;color:#67727F;font-weight:600;">${esc(l.label)}</span></div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      ${V.filters.map(f => `<button data-click="${reg(f.onClick)}" style="${css(f.style)}">${esc(f.label)}</button>`).join('')}
+    </div>
+
+    <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;overflow:hidden;">
+      <div style="display:flex;">
+        <div style="width:296px;flex:0 0 296px;border-right:1px solid #E7EBEF;">
+          <div style="height:58px;border-bottom:1px solid #E7EBEF;display:flex;align-items:center;padding:0 18px;font-size:11.5px;font-weight:800;color:#9AA4B0;letter-spacing:.06em;">CAMPAIGN</div>
+          ${V.calRows.map(c => `
+            <div data-click="${reg(c.onClick)}" style="${css(c.labelCellStyle)}">
+              <div style="display:flex;align-items:center;gap:9px;min-width:0;">
+                <span style="${css(c.divStyle)}"></span>
+                <span style="font-size:13.5px;font-weight:700;letter-spacing:-.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.name)}</span>
+                <span style="${css(c.newBadge)}">NEW</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="${css(c.statusStyle)}">${esc(c.statusLabel)}</span>
+                <div style="display:flex;gap:3px;">
+                  ${c.toolDots.map(d => `<span style="${css(d.style)}"></span>`).join('')}
+                </div>
+                <span style="font-size:11px;color:#9AA4B0;margin-left:auto;">${esc(c.owner)}</span>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div style="flex:1;position:relative;min-width:0;overflow-x:auto;" data-calscroll>
+          <div style="height:58px;border-bottom:1px solid #E7EBEF;position:relative;">
+            ${V.months.map(m => `<div style="${css(m.style)}">${esc(m.name)}</div>`).join('')}
+            ${V.weeks.map(w => `<div style="${css(w.labelStyle)}">${esc(w.label)}</div>`).join('')}
+            <div style="${css(V.todayPillStyle)}">TODAY</div>
+          </div>
+          <div style="position:relative;">
+            <div style="position:absolute;inset:0;pointer-events:none;z-index:0;">
+              ${V.weeks.map(w => `<div style="${css(w.lineStyle)}"></div>`).join('')}
+            </div>
+            <div style="${css(V.todayLineStyle)}"></div>
+            ${V.calRows.map(c => `
+              <div style="${css(c.trackRowStyle)}">
+                ${c.flights.map(f => `
+                  <div data-click="${reg(f.onClick)}" title="${esc(f.channels)}" style="${css(f.barStyle)}">
+                    <span style="font-size:11.5px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em;">${esc(f.label)}</span>
+                  </div>`).join('')}
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#9AA4B0;margin-top:12px;text-align:center;">Click a campaign to drill in · click a flight bar to open its creative</div>
+  </div>`;
+}
+
+function viewWorkflow(V){
+  return `
+  <div style="max-width:1120px;margin:0 auto;">
+    <div style="margin-bottom:16px;">
+      <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0 0 4px;">Workflow</h1>
+      <div style="font-size:13.5px;color:#67727F;">From the GM MAS brief to live creative — across Human, Craft & Delivery. Tap any step to see the roles.</div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+      ${V.wfLegend.map(l => `
+        <div style="display:flex;align-items:center;gap:8px;border:1px solid #E7EBEF;background:#fff;border-radius:999px;padding:6px 13px 6px 11px;">
+          <span style="${css(l.dotStyle)}"></span>
+          <span style="${css(l.nameStyle)}">${esc(l.name)}</span>
+          <span style="font-size:11.5px;color:#9AA4B0;">${esc(l.desc)}</span>
+        </div>`).join('')}
+    </div>
+
+    <div data-click="${reg(V.intakeOnClick)}" style="background:#0B0D10;border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:15px;cursor:pointer;">
+      <span style="font-size:10px;font-weight:900;letter-spacing:.1em;color:#04222B;background:#00BCF2;padding:5px 9px;border-radius:6px;flex-shrink:0;">START</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:17px;font-weight:800;letter-spacing:-.02em;color:#fff;">Brief from GM MAS</div>
+        <div style="font-size:12.5px;color:#9AA4B0;margin-top:2px;">Marketing Activation System · campaign intake</div>
+      </div>
+      <span style="color:#00BCF2;font-weight:800;font-size:13px;white-space:nowrap;flex-shrink:0;">View roles ›</span>
+    </div>
+
+    ${V.wfPhases.map(p => `
+      <div style="display:flex;justify-content:center;padding:5px 0;"><div style="width:2px;height:26px;background:#D6DCE3;"></div></div>
+      <div style="background:#F7F8FA;border:1px solid #EAEEF2;border-radius:18px;padding:18px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="width:34px;height:34px;border-radius:10px;background:#0B0D10;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;">${esc(p.num)}</span>
+          <div>
+            <div style="font-size:17px;font-weight:800;letter-spacing:-.02em;">${esc(p.label)}</div>
+            <div style="font-size:12px;color:#9AA4B0;">${esc(p.sub)}</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;">
+          ${p.lanes.map(ln => `
+            <div style="flex:1 1 260px;min-width:230px;background:#fff;border:1px solid #E7EBEF;border-radius:14px;padding:14px 15px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <span style="${css(ln.nameStyle)}">${esc(ln.name)}</span>
+                <span style="font-size:11px;color:#B0B8C1;">${esc(ln.desc)}</span>
+              </div>
+              <div style="${css(ln.barStyle)}"></div>
+              ${ln.boxes.map(b => `
+                <div data-click="${reg(b.onClick)}" style="${css(b.boxStyle)}">
+                  <div style="font-size:13.5px;font-weight:700;letter-spacing:-.01em;">${esc(b.title)}</div>
+                  <div style="font-size:11.5px;color:#9AA4B0;margin-top:3px;line-height:1.4;">${esc(b.note)}</div>
+                  <div style="${css(b.linkStyle)}">View roles ›</div>
+                </div>`).join('')}
+            </div>`).join('')}
+        </div>
+      </div>`).join('')}
+
+    <div style="display:flex;justify-content:center;padding:5px 0;"><div style="width:2px;height:26px;background:#D6DCE3;"></div></div>
+    <div style="background:#E2F5F2;border:1px solid #C9ECE6;border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:14px;">
+      <span style="width:30px;height:30px;border-radius:50%;background:#0FA697;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;flex-shrink:0;">✓</span>
+      <div>
+        <div style="font-size:15px;font-weight:800;letter-spacing:-.01em;color:#0B5249;">Live across Tier 1, Tier 2 & Social</div>
+        <div style="font-size:12.5px;color:#3C7A70;margin-top:1px;">Trafficked, optimized & reported back to GM</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function viewCampaign(V){
+  const cd = V.cd; if(!cd) return '';
+  return `
+  <div style="max-width:1380px;margin:0 auto;">
+    <button data-click="${reg(V.back)}" style="border:none;background:none;color:#67727F;font-weight:700;font-size:13px;cursor:pointer;padding:0;margin-bottom:16px;">← Back to calendar</button>
+
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:22px;">
+      <div style="min-width:0;">
+        <div style="display:flex;align-items:center;gap:11px;margin-bottom:8px;">
+          <span style="${css(cd.divStyle)}"></span>
+          <h1 style="font-size:28px;font-weight:800;letter-spacing:-.03em;margin:0;">${esc(cd.name)}</h1>
+          <span style="${css(cd.statusStyle)}">${esc(cd.statusLabel)}</span>
+        </div>
+        <div style="font-size:13.5px;color:#67727F;">${esc(cd.division)} · Owner ${esc(cd.owner)} · ${esc(cd.dateRange)}</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0;">
+        ${cd.sources.map(s => `
+          <div title="Open in ${esc(s.name)}" style="display:flex;align-items:center;gap:8px;padding:7px 12px 7px 8px;border:1px solid #E7EBEF;border-radius:10px;background:#fff;cursor:pointer;">
+            <div style="${css(s.chipStyle)}">${esc(s.mono)}</div>
+            <div><div style="font-size:12px;font-weight:700;line-height:1.1;">${esc(s.name)}</div><div style="font-size:10.5px;color:#9AA4B0;">${esc(s.label)}</div></div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;">
+      ${cd.stats.map(k => `
+        <div style="background:#fff;border:1px solid #E7EBEF;border-radius:14px;padding:16px 18px;">
+          <div style="font-size:12px;font-weight:600;color:#6B7682;margin-bottom:5px;">${esc(k.label)}</div>
+          <div style="font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1;">${esc(k.value)}</div>
+        </div>`).join('')}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start;">
+      <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:20px 22px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <h3 style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0;">Flights</h3>
+          <span style="font-size:12px;font-weight:600;color:#9AA4B0;">Click a flight to open its creative</span>
+        </div>
+        ${cd.flights.map(fl => `
+          <div data-click="${reg(fl.onClick)}" style="border:1px solid #EEF1F4;border-radius:13px;padding:15px 16px;margin-top:13px;cursor:pointer;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px;">
+              <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                <span style="font-size:15px;font-weight:800;letter-spacing:-.015em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(fl.name)}</span>
+                <span style="${css(fl.statusStyle)}">${esc(fl.statusLabel)}</span>
+              </div>
+              <span style="font-size:12.5px;color:#9AA4B0;font-weight:600;flex-shrink:0;">${esc(fl.dateRange)}</span>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+              ${fl.channels.map(ch => `<span style="font-size:11px;font-weight:700;color:#5A6470;background:#F2F4F7;padding:3px 9px;border-radius:7px;">${esc(ch)}</span>`).join('')}
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <span style="font-size:12px;font-weight:700;color:#0B0D10;flex-shrink:0;">${esc(fl.creatives)} creatives</span>
+              <div style="flex:1;height:6px;border-radius:4px;background:#EEF1F4;overflow:hidden;"><div style="${css(fl.barFill)}"></div></div>
+              <span style="font-size:12px;font-weight:700;color:#67727F;width:34px;text-align:right;">${esc(fl.pctLabel)}</span>
+              <span style="color:#00A7DB;font-weight:800;font-size:12px;flex-shrink:0;">Open →</span>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:20px 22px 10px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <h3 style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0;">Tasks</h3>
+            <span style="font-size:10.5px;font-weight:800;color:#2D6FE0;background:#2D6FE01A;padding:2px 8px;border-radius:999px;letter-spacing:.02em;">SMARTSHEET</span>
+          </div>
+          ${cd.tasks.map(t => `
+            <div style="display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid #F1F3F6;">
+              <div style="${css(t.avatarStyle)}">${esc(t.avatar)}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</div>
+                <div style="font-size:11px;color:#9AA4B0;margin-top:1px;">${esc(t.assignee)} · due ${esc(t.due)}</div>
+              </div>
+              <span style="${css(t.statusStyle)}">${esc(t.statusLabel)}</span>
+            </div>`).join('')}
+        </div>
+        <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:20px 22px 12px;">
+          <h3 style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0 0 6px;">Activity</h3>
+          ${cd.activity.map(a => `
+            <div style="display:flex;gap:11px;padding:10px 0;">
+              <span style="${css(a.dotStyle)}"></span>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:12.5px;color:#33404C;line-height:1.45;"><span style="font-weight:800;">${esc(a.who)}</span> ${esc(a.text)}</div>
+                <div style="font-size:11px;color:#9AA4B0;margin-top:2px;">${esc(a.time)}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function viewCreative(V){
+  const cr = V.cr; if(!cr) return '';
+  return `
+  <div style="max-width:1380px;margin:0 auto;">
+    <button data-click="${reg(V.back)}" style="border:none;background:none;color:#67727F;font-weight:700;font-size:13px;cursor:pointer;padding:0;margin-bottom:16px;">← Back to campaign</button>
+
+    <div style="margin-bottom:20px;">
+      <div style="font-size:13px;font-weight:600;color:#9AA4B0;margin-bottom:4px;">${esc(cr.campaignName)} · ${esc(cr.channels)}</div>
+      <h1 style="font-size:28px;font-weight:800;letter-spacing:-.03em;margin:0 0 6px;">${esc(cr.flightName)}</h1>
+      <div style="font-size:15px;font-weight:700;color:#00A7DB;letter-spacing:-.01em;">${esc(cr.summary)}</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;">
+      ${cr.stats.map(k => `
+        <div style="background:#fff;border:1px solid #E7EBEF;border-radius:14px;padding:16px 18px;">
+          <div style="font-size:12px;font-weight:600;color:#6B7682;margin-bottom:5px;">${esc(k.label)}</div>
+          <div style="font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1;">${esc(k.value)}</div>
+        </div>`).join('')}
+    </div>
+
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start;">
+      <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:18px;position:sticky;top:0;">
+        <div style="height:180px;border-radius:12px;background:repeating-linear-gradient(135deg,#EDF0F3 0,#EDF0F3 11px,#E4E8ED 11px,#E4E8ED 22px);display:flex;align-items:center;justify-content:center;border:1px solid #E7EBEF;margin-bottom:14px;">
+          <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:#9AA4B0;letter-spacing:.04em;">[ master frame · 1920×1080 ]</span>
+        </div>
+        <div style="font-size:11px;font-weight:800;color:#B24BFF;background:#B24BFF1A;padding:3px 9px;border-radius:999px;display:inline-block;letter-spacing:.02em;margin-bottom:9px;">FIGMA SOURCE</div>
+        <h3 style="font-size:17px;font-weight:800;letter-spacing:-.02em;margin:0 0 5px;">${esc(cr.conceptName)}</h3>
+        <p style="font-size:12.5px;color:#7A8694;line-height:1.5;margin:0 0 14px;">One approved master concept. Clinch fans it out across audiences & regions; Celtra renders every ad size.</p>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid #EEF1F4;border-radius:10px;cursor:pointer;">
+            <span style="width:8px;height:8px;border-radius:2px;background:#B24BFF;"></span><span style="font-size:12.5px;font-weight:700;">Open master in Figma</span><span style="margin-left:auto;color:#C4CCD6;">↗</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid #EEF1F4;border-radius:10px;cursor:pointer;">
+            <span style="width:8px;height:8px;border-radius:2px;background:#FF6A3D;"></span><span style="font-size:12.5px;font-weight:700;">View Clinch decision tree</span><span style="margin-left:auto;color:#C4CCD6;">↗</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:13px;">
+          <h3 style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0;">Dynamic variants</h3>
+          <span style="font-size:10.5px;font-weight:800;color:#FF6A3D;background:#FF6A3D1A;padding:2px 8px;border-radius:999px;letter-spacing:.02em;">CLINCH DCO</span>
+          <span style="font-size:10.5px;font-weight:800;color:#0FB3A3;background:#0FB3A31A;padding:2px 8px;border-radius:999px;letter-spacing:.02em;">CELTRA SIZES</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
+          ${cr.variants.map(v => `
+            <div style="background:#fff;border:1px solid #E7EBEF;border-radius:13px;overflow:hidden;cursor:pointer;">
+              <div style="${css(v.thumbStyle)}">
+                <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:10px;color:#9AA4B0;letter-spacing:.03em;">${esc(v.sizeLabel)}</span>
+              </div>
+              <div style="padding:11px 12px;">
+                <div style="font-size:13px;font-weight:800;letter-spacing:-.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(v.audience)}</div>
+                <div style="font-size:11px;color:#9AA4B0;margin-bottom:9px;">${esc(v.region)}</div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+                  <span style="${css(v.statusStyle)}">${esc(v.statusLabel)}</span>
+                  <span style="font-size:11px;font-weight:700;color:#0FB3A3;">${esc(v.sizes)}</span>
+                </div>
+                <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:10px;color:#C0C7D0;margin-top:8px;">${esc(v.clinch)}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function viewWfPanel(V){
+  if(!V.wfOpen || !V.wfPanel) return '';
+  const p = V.wfPanel;
+  return `
+  <div data-click="${reg(V.closeStep)}" style="position:fixed;inset:0;background:rgba(11,13,16,.45);backdrop-filter:blur(3px);z-index:50;display:flex;justify-content:flex-end;">
+    <div data-click="${reg(V.wfStop)}" style="width:min(440px,100%);height:100%;background:#fff;box-shadow:-20px 0 60px rgba(11,13,16,.25);display:flex;flex-direction:column;">
+      <div style="padding:22px 24px;border-bottom:1px solid #EEF1F4;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+          <span style="${css(p.tagStyle)}">${esc(p.laneName)}</span>
+          <button data-click="${reg(V.closeStep)}" style="border:none;background:#F0F2F5;width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:15px;color:#67727F;">✕</button>
+        </div>
+        <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0;">${esc(p.title)}</h2>
+        <div style="font-size:12.5px;color:#9AA4B0;margin-top:3px;">${esc(p.phase)} · ${esc(p.laneName)} lane</div>
+      </div>
+      <div style="padding:16px 24px 24px;overflow-y:auto;flex:1;">
+        <div style="font-size:11px;font-weight:800;color:#9AA4B0;letter-spacing:.06em;margin-bottom:4px;">ROLES INVOLVED</div>
+        ${p.roles.map(r => `
+          <div style="display:flex;gap:13px;padding:14px 0;border-bottom:1px solid #F1F3F6;">
+            <div style="${css(r.avatarStyle)}">${esc(r.initials)}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:14px;font-weight:800;letter-spacing:-.01em;">${esc(r.name)}</div>
+              <div style="font-size:12.5px;color:#7A8694;line-height:1.45;margin-top:2px;">${esc(r.resp)}</div>
+              <div style="margin-top:8px;"><span style="font-size:10.5px;font-weight:700;color:#5A6470;background:#F2F4F7;padding:3px 9px;border-radius:6px;">${esc(r.tool)}</span></div>
+            </div>
+          </div>`).join('')}
+        <div style="margin-top:18px;background:#FAFBFC;border:1px dashed #D6DCE3;border-radius:12px;padding:14px 15px;font-size:12px;color:#9AA4B0;line-height:1.5;">Placeholder — detailed RACI, hand-offs, SLAs & deliverables for this step will live here.</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function viewPdf(V){
+  if(!V.pdfOpen) return '';
+  let body = '';
+  if(V.pdfStep0){
+    body = `
+      <div>
+        <p style="font-size:13.5px;color:#67727F;margin:4px 0 18px;line-height:1.5;">Drop a media plan or brief. Control Room reads it and drafts calendar entries — no manual re-keying.</p>
+        <div style="border:2px dashed #D6DCE3;border-radius:14px;padding:22px;display:flex;align-items:center;gap:16px;background:#FAFBFC;">
+          <span style="width:48px;height:58px;border-radius:8px;background:#fff;border:1px solid #E7EBEF;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;color:#E2455C;flex-shrink:0;">PDF</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14.5px;font-weight:800;letter-spacing:-.01em;">Chevy_Trax_BackToSchool_Brief.pdf</div>
+            <div style="font-size:12px;color:#9AA4B0;margin-top:2px;">14 pages · 2.4 MB · ready to parse</div>
+          </div>
+          <span style="font-size:11px;font-weight:800;color:#0FA697;background:#E2F5F2;padding:4px 10px;border-radius:999px;">ATTACHED</span>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:22px;">
+          <button data-click="${reg(V.closePdf)}" style="border:1px solid #E2E6EB;background:#fff;color:#5A6470;font-weight:700;font-size:13px;padding:10px 18px;border-radius:10px;cursor:pointer;">Cancel</button>
+          <button data-click="${reg(V.parseBrief)}" style="border:none;background:#00BCF2;color:#04222B;font-weight:800;font-size:13px;padding:10px 20px;border-radius:10px;cursor:pointer;">Parse brief →</button>
+        </div>
+      </div>`;
+  } else if(V.pdfStep1){
+    body = `
+      <div>
+        <p style="font-size:13.5px;color:#67727F;margin:4px 0 18px;line-height:1.5;">Reading 14 pages — extracting campaign, flights, channels & budget…</p>
+        <div style="display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:start;">
+          <div style="position:relative;height:200px;border-radius:12px;border:1px solid #E7EBEF;overflow:hidden;background:repeating-linear-gradient(180deg,#fff 0,#fff 13px,#F2F4F7 13px,#F2F4F7 15px);">
+            <div style="${css(V.pdfScanStyle)}"></div>
+          </div>
+          <div>
+            <div style="height:7px;border-radius:999px;background:#EEF1F4;overflow:hidden;margin-bottom:14px;"><div style="${css(V.pdfProgressStyle)}"></div></div>
+            ${V.pdfFields.map(r => `
+              <div style="${css(r.rowStyle)}">
+                <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                  <span style="${css(r.checkStyle)}">${esc(r.check)}</span>
+                  <span style="font-size:12.5px;color:#9AA4B0;font-weight:600;">${esc(r.label)}</span>
+                </div>
+                <span style="font-size:12.5px;font-weight:700;color:#0B0D10;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;">${esc(r.value)}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>`;
+  } else if(V.pdfStep2){
+    body = `
+      <div>
+        <div style="display:flex;align-items:center;gap:9px;margin:6px 0 16px;">
+          <span style="width:20px;height:20px;border-radius:50%;background:#E2F5F2;color:#0FA697;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;">✓</span>
+          <p style="font-size:13.5px;color:#33404C;margin:0;font-weight:600;">Parsed clean. This campaign & its flights will be added to the calendar.</p>
+        </div>
+        <div style="border:1px solid #E7EBEF;border-radius:14px;padding:18px;background:#FAFBFC;">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px;">
+            <span style="width:11px;height:11px;border-radius:50%;background:#2D6FE0;"></span>
+            <span style="font-size:16px;font-weight:800;letter-spacing:-.02em;">Chevrolet Trax — Back-to-School</span>
+          </div>
+          <div style="font-size:12.5px;color:#9AA4B0;margin-bottom:14px;">Chevrolet · Aug 3 – Oct 10, 2026 · $2.8M · source: imported PDF</div>
+          ${V.pdfNewFlights.map(f => `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-top:1px solid #EEF1F4;">
+              <div style="min-width:0;">
+                <div style="font-size:13.5px;font-weight:800;letter-spacing:-.01em;">${esc(f.name)}</div>
+                <div style="font-size:11.5px;color:#9AA4B0;margin-top:2px;">${esc(f.channels)} · ${esc(f.creatives)}</div>
+              </div>
+              <span style="font-size:12px;font-weight:700;color:#67727F;white-space:nowrap;">${esc(f.dateRange)}</span>
+            </div>`).join('')}
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+          <button data-click="${reg(V.closePdf)}" style="border:1px solid #E2E6EB;background:#fff;color:#5A6470;font-weight:700;font-size:13px;padding:10px 18px;border-radius:10px;cursor:pointer;">Cancel</button>
+          <button data-click="${reg(V.addToCalendar)}" style="border:none;background:#00BCF2;color:#04222B;font-weight:800;font-size:13px;padding:10px 20px;border-radius:10px;cursor:pointer;">Add to calendar →</button>
+        </div>
+      </div>`;
+  }
+  return `
+  <div style="position:fixed;inset:0;background:rgba(11,13,16,.45);backdrop-filter:blur(3px);z-index:50;display:flex;align-items:center;justify-content:center;padding:30px;">
+    <div style="background:#fff;border-radius:20px;width:660px;max-width:100%;padding:28px 30px 30px;box-shadow:0 30px 80px rgba(11,13,16,.34);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="width:30px;height:30px;border-radius:8px;background:#E2455C1A;color:#E2455C;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:9.5px;">PDF</span>
+          <h2 style="font-size:19px;font-weight:800;margin:0;letter-spacing:-.02em;">Import brief</h2>
+        </div>
+        <button data-click="${reg(V.closePdf)}" style="border:none;background:#F0F2F5;width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:15px;color:#67727F;">✕</button>
+      </div>
+      ${body}
+    </div>
+  </div>`;
+}
+
+/* ---------- shell + render ---------- */
+function buildHTML(V){
+  let content = '';
+  if(V.isOverview) content = viewOverview(V);
+  else if(V.isCalendar) content = viewCalendar(V);
+  else if(V.isWorkflow) content = viewWorkflow(V);
+  else if(V.isCampaign) content = viewCampaign(V);
+  else if(V.isCreative) content = viewCreative(V);
+
+  return `
+  <div style="display:flex;height:100vh;width:100%;overflow:hidden;background:#F4F6F8;">
+    <div style="width:76px;flex:0 0 76px;background:#0B0D10;display:flex;flex-direction:column;align-items:center;padding:18px 0 16px;gap:6px;z-index:20;">
+      <div style="width:44px;height:44px;border-radius:13px;background:#fff;display:flex;align-items:center;justify-content:center;margin-bottom:10px;overflow:hidden;">
+        <img src="assets/gm-logo.png" alt="GM" style="width:30px;height:30px;display:block;filter:brightness(0);" />
+      </div>
+      <button data-click="${reg(V.goOverview)}" title="Home" style="${css(V.navHomeStyle)}">${ICON_HOME}</button>
+      <button data-click="${reg(V.goCalendar)}" title="Calendar" style="${css(V.navCalStyle)}">${ICON_CAL}</button>
+      <button data-click="${reg(V.goWorkflow)}" title="Workflow" style="${css(V.navWfStyle)}">${ICON_WF}</button>
+      <div style="flex:1;"></div>
+      <div style="${css(V.roleAvatar.style)}">${esc(V.roleAvatar.text)}</div>
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;">
+      <header style="height:64px;flex:0 0 64px;background:#fff;border-bottom:1px solid #E7EBEF;display:flex;align-items:center;gap:14px;padding:0 26px;z-index:10;">
+        <div style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;flex-shrink:1;">
+          ${V.crumbs.map(c => `
+            <span style="color:#C4CCD6;margin:0 3px;font-size:13px;">${esc(c.sep)}</span>
+            <button data-click="${reg(c.onClick)}" style="${css(c.style)}">${esc(c.label)}</button>`).join('')}
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:16px;">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 12px 6px 10px;border:1px solid #E7EBEF;border-radius:999px;flex-shrink:0;white-space:nowrap;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#0FA697;animation:pulse 1.6s infinite;flex-shrink:0;"></span>
+            <span style="font-size:12px;font-weight:600;color:#67727F;">5 sources live</span>
+          </div>
+          <div style="display:flex;background:#F0F2F5;border-radius:10px;padding:3px;gap:2px;">
+            ${V.roles.map(r => `<button data-click="${reg(r.onClick)}" style="${css(r.style)}">${esc(r.label)}</button>`).join('')}
+          </div>
+          <button data-click="${reg(V.openPdf)}" style="display:flex;align-items:center;gap:7px;background:#00BCF2;border:none;color:#04222B;font-weight:800;font-size:12.5px;padding:9px 15px;border-radius:10px;cursor:pointer;letter-spacing:.005em;">
+            ${ICON_PLUS}
+            Import brief
+          </button>
+        </div>
+      </header>
+
+      <main data-mainscroll style="flex:1;overflow-y:auto;padding:26px 30px 64px;">
+        ${content}
+      </main>
+    </div>
+
+    ${viewWfPanel(V)}
+    ${viewPdf(V)}
+  </div>`;
+}
+
+let _root, _delegated = false;
+function render(){
+  if(!_root) _root = document.getElementById('root');
+  // preserve scroll across full re-renders
+  const prevMain = _root.querySelector('[data-mainscroll]');
+  const prevCal = _root.querySelector('[data-calscroll]');
+  const mainTop = prevMain ? prevMain.scrollTop : 0;
+  const calLeft = prevCal ? prevCal.scrollLeft : 0;
+
+  H = {}; hid = 0;
+  const V = App.renderVals();
+  _root.innerHTML = buildHTML(V);
+
+  const newMain = _root.querySelector('[data-mainscroll]');
+  if(newMain) newMain.scrollTop = mainTop;
+  const newCal = _root.querySelector('[data-calscroll]');
+  if(newCal) newCal.scrollLeft = calLeft;
+
+  if(!_delegated){
+    _root.addEventListener('click', (e) => {
+      const el = e.target.closest('[data-click]');
+      if(!el) return;
+      const fn = H[el.getAttribute('data-click')];
+      if(fn) fn(e);
+    });
+    _delegated = true;
+  }
+}
+
+render();
+App.componentDidMount();
+</script>
+</body>
+</html>
