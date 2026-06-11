@@ -36,7 +36,7 @@ function css(o){ if(!o) return ''; return Object.keys(o).map(k => k.replace(/[A-
 function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 const App = {
-  state: { screen:'overview', role:'exec', campaignId:null, flightId:null, pdfOpen:false, pdfStep:0, pdfReveal:0, tick:0, filter:'all', addedId:null, added:false, wfSel:null },
+  state: { screen:'delivery', role:'exec', campaignId:null, flightId:null, pdfOpen:false, pdfStep:0, pdfReveal:0, tick:0, filter:'all', addedId:null, added:false, wfLayer:'all', roadmap:'90' },
 
   setState(patch){
     const p = (typeof patch === 'function') ? patch(this.state) : patch;
@@ -101,34 +101,282 @@ const App = {
     {id:'trax-aware',name:'Awareness',start:'2026-08-03',end:'2026-09-01',status:'planned',channels:['CTV','Social','Display'],creatives:30},
     {id:'trax-conv',name:'Conversion',start:'2026-09-01',end:'2026-10-10',status:'planned',channels:['Display','Search','Social'],creatives:54},
   ]},
-  WF_LANES: [
-    {key:'human',name:'HUMAN',color:'#00A7DB',desc:'Relationship-focused'},
-    {key:'craft',name:'CRAFT',color:'#7A5AF0',desc:'Value meets volume'},
-    {key:'delivery',name:'DELIVERY',color:'#0FA697',desc:'Seamless integration'},
+  // ===== Tierless model data (ported from the GM Canada T1+T2 pitch) =====
+  DELIVERY_META: [
+    {k:'T1 monthly assets',v:'Continuous across 4 brands'},
+    {k:'T2 monthly assets (EN+FR)',v:'~3,260+ EN+FR (RMAB + CSMAB)'},
+    {k:'Regions',v:'Vancouver · Toronto · Montreal'},
+    {k:'Languages',v:'EN + FR · DDN = 3 versions (EN QC / EN ROC / FR QC)'},
+    {k:'Social',v:'A1.1 — 4 brands · 16+ channels · Chevy FR Instagram separate'},
   ],
-  WF_PHASES: [
-    {key:'tier1',label:'Tier 1',sub:'National brand',boxes:{
-      human:[{id:'t1h1',title:'Kickoff & scoping',note:'Align objectives, audiences & KPIs'},{id:'t1h2',title:'Strategy alignment',note:'Brand strategy sign-off with GM'}],
-      craft:[{id:'t1c1',title:'Hero concepting',note:'Big-idea concepts & moodboards'},{id:'t1c2',title:'Master design',note:'Master frames built in Figma'}],
-      delivery:[{id:'t1d1',title:'DCO architecture',note:'Decision tree mapped in Clinch'},{id:'t1d2',title:'Trafficking plan',note:'Tagging & feed specification'}],
-    }},
-    {key:'tier2',label:'Tier 2',sub:'Regional & dealer',boxes:{
-      human:[{id:'t2h1',title:'Regional planning',note:'Market & dealer requirements'},{id:'t2h2',title:'Stakeholder review',note:'Regional approvals routed'}],
-      craft:[{id:'t2c1',title:'Localization',note:'Adapt master to markets & offers'},{id:'t2c2',title:'Sizing',note:'Full size set rendered in Celtra'}],
-      delivery:[{id:'t2d1',title:'Feed setup',note:'Inventory & offer feeds wired'},{id:'t2d2',title:'QA & publish',note:'Automated QA, then go live'}],
-    }},
-    {key:'social',label:'Tier Social',sub:'Social & community',boxes:{
-      human:[{id:'tsh1',title:'Social strategy',note:'Platform & creator approach'},{id:'tsh2',title:'Community brief',note:'Tone, moments & cadence'}],
-      craft:[{id:'tsc1',title:'Social-native craft',note:'Vertical, thumb-stopping builds'},{id:'tsc2',title:'Motion & cutdowns',note:'Edits & variants per platform'}],
-      delivery:[{id:'tsd1',title:'Channel publish',note:'Schedule & native publishing'},{id:'tsd2',title:'Optimize & report',note:'Performance loop & insights'}],
-    }},
+  DELIVERY_STATS: [
+    {v:'50.5',l:'FTE across all GM stakeholder brands',tone:'cyan'},
+    {v:'~3,260+',l:'EN+FR T2 assets per month',tone:'cyan'},
+    {v:'8',l:'Workflow phases, brief → measure',tone:'good'},
+    {v:'~30',l:'Legal entities billed monthly',tone:'bad'},
   ],
-  WF_ROLES: {
-    human:[{name:'Account Lead',resp:'Owns the GM relationship & scope',tool:'Smartsheet'},{name:'Brand Strategist',resp:'Translates the brief into strategy',tool:'PDF brief'},{name:'Project Manager',resp:'Drives the timeline & approvals',tool:'Smartsheet'}],
-    craft:[{name:'Creative Director',resp:'Sets and holds the creative bar',tool:'Figma'},{name:'Art Director',resp:'Designs the master & systems',tool:'Figma'},{name:'Designer',resp:'Builds & adapts every asset',tool:'Figma'},{name:'Motion Designer',resp:'Cutdowns, motion & variants',tool:'Celtra'}],
-    delivery:[{name:'Ad Ops Lead',resp:'Owns trafficking & delivery',tool:'Clinch'},{name:'DCO Engineer',resp:'Builds dynamic logic & feeds',tool:'Clinch'},{name:'QA Specialist',resp:'Validates every variant & size',tool:'Celtra'}],
+  WF_LAYERS: [
+    {key:'all',name:'All',num:'✦'},
+    {key:'account',name:'Human (Account)',num:'1'},
+    {key:'craft',name:'Craft (Creative)',num:'2'},
+    {key:'delivery',name:'Delivery (Production)',num:'3'},
+    {key:'tech',name:'Tech',num:'4'},
+  ],
+  WF_COLS: [
+    {key:'account',name:'Account',sub:'Client + GM relationship',color:'#00A7DB'},
+    {key:'craft',name:'Craft + Creative',sub:'Strategy + concepting',color:'#7A5AF0'},
+    {key:'delivery',name:'Production + Studio',sub:'Rethink Studio execution',color:'#0FA697'},
+    {key:'tech',name:'Tech + AI',sub:'Automation + tooling',color:'#2D6FE0'},
+    {key:'ba',name:'Legal + Finance',sub:'BA pod',color:'#E0902A'},
+  ],
+  POD: {title:'Legal + Finance Pod',sub:'Runs across all phases, all brands, all tiers',fte:'3.0 FTE',roles:[
+    {title:'Senior BA Lead T2',fte:'1.0 FTE',desc:'Rights clearance · Ziflow ownership · CA ad standards · QC language law · legal review routing · AI synthetic disclosure'},
+    {title:'BA Coordinator T2',fte:'1.0 FTE',desc:'Ziflow submissions · checklist QA · legal prep · Smartsheet legal status updates · external counsel liaison'},
+    {title:'Financial Ops Manager',fte:'1.0 FTE',desc:'~30 legal entity BCRs · monthly accruals · standardized invoicing · bi-annual hour reconciliation · estimate approvals'},
+  ]},
+  WF_GRID: [
+    {num:'01',name:'Brief Intake',sub:'GM Canada → Rethink',
+      account:{who:'Group Business Lead',langs:['EN','FR','EN','FR'],tasks:['GM Canada monthly brief received via Opal calendar','Offer matrix, KPIs, budget confirmed per brand + region','Monthly Full Day Offer Creation Workshop attended','Regional account leads briefed — Vancouver, Toronto, Montreal'],fte:'1.0 FTE — GBL + Regional ADs'},
+      craft:{who:'GSD + Creative Directors',tasks:['T1 brand calendar reviewed against T2 brief','Net-new creative direction flagged to CDs','Competitive landscape reviewed monthly'],fte:'0.5 FTE'},
+      delivery:{who:'Executive Producer — GM Totality (T1+T2)',tasks:["T1 master asset status confirmed — what's ready to flow to T2",'Dir. Studio Tech + Integration briefed on incoming T2 volume + routing','Studio EP capacity checked across all 3 hubs'],fte:'0.5 FTE'},
+      tech:{who:'Dir. Studio Tech + Integration',tasks:['Airtable IMC updated — Month N brief ingested','Opal → Airtable sync verified via Zapier','Smartsheet asset register rows pre-built for incoming campaign','Google Workspace: brief docs, shared calendars, collaborative review'],tools:[{l:'Airtable IMC'},{l:'Opal'},{l:'Smartsheet',k:'gm'},{l:'Google Workspace',k:'google'}]},
+      ba:[{tag:'Senior BA',k:'t2',title:'Brief intake',desc:'Usage rights for US assets confirmed · music clearance requirements flagged · estimate structure prepared per entity'},{tag:'Fin Ops',k:'fin',desc:'BCR rows open per brand, region, entity · budget confirmed vs prior month actuals'}]},
+    {num:'02',name:'Asset Classification',sub:'10 / 60 / 30 routing',
+      account:{who:'Regional Account Leads',langs:['EN','FR'],tasks:['Regional brief translated per RMAB + CSMAB entity','Asset classification confirmed with Studio EP — adapt vs ref vs net new','Regional offer variations documented per RMAB (up to 15 regions)'],fte:'3.0 FTE — all regional ADs + ASs'},
+      craft:{who:'CD T2 + Art Directors + Copywriters',tasks:['Net-new (30%) creative brief written','Reference (60%) creative direction documented','FR creative team briefed — Montreal'],fte:'2.0 FTE'},
+      delivery:{who:'Studio EPs — Central + Regional hubs',tasks:['Jobs routed: Adapt + Reference → Rethink Studio',"Net-new → Agency Production (Stef's team)",'Makers assigned per hub — Vancouver, Toronto, Montreal'],fte:'2.0 FTE — EPs + Producers'},
+      tech:{who:'Dir. Studio Tech + Integration + Automation Engineer',tasks:['AI classification scoring in Airtable — adapt vs ref vs net-new suggestion','GenStudio brand kit selected per brand — all 4 locked','DCO content matrix structure prepared in Smartsheet'],tools:[{l:'AI classification',k:'ai'},{l:'Airtable'},{l:'Smartsheet DCO',k:'gm'}]},
+      ba:[{tag:'Senior BA',k:'t2',title:'Estimate approvals',desc:'Estimates reviewed and submitted per entity · net-new scopes legal-reviewed before work begins · offer change round counter monitored (rounds 5+ = hourly rate)'},{tag:'Fin Ops',k:'fin',desc:'Estimates entered into BCR per brand/region/entity · PO requests submitted where required'}]},
+    {num:'03',name:'T1 Production',sub:'Brand + national',
+      account:{who:'Executive Producer T1/T2 · Quebec Creative Lead',langs:['EN','FR'],tasks:['T1 client status meetings — weekly brand teams','Ad Comm monthly collaboration deck — led by account','US asset usage rights coordination with BA'],fte:'1.5 FTE'},
+      craft:{who:'CCO · ECD · CD T2 · Art Directors · Copywriters',tasks:['Brand creative: Chevy, GMC, Buick, Cadillac — EN + FR masters','Broadcast adaptations — US creative Canadianized · V/O briefed','Paid social: static, OLV, reels, carousels — all specs','OLA, OLV, DDN, mastheads, badges — all 4 brands'],fte:'4.0 FTE — senior creative'},
+      delivery:{who:'Agency EP + Agency Producers + Studio Post EP',tasks:['Broadcast: end card updates, V/O records, 15s/30s cuts — monthly','OLV versioning: EN + FR, trim variations per nameplate','Audio: retail V/O cycle, Saltzman tags, Cadillac audio','CGI reveals, sizzle reels, experiential (Stampede, F1, Auto Show)'],fte:'3.5 FTE — producers + makers'},
+      tech:{who:'Platform Director + Automation Engineer',tasks:['Adobe GenStudio — brand-gated T1 variant generation','KREA AI — vehicle imagery enhancement + colour variants','ElevenLabs — AI V/O for retail cycle (monthly volume)','Frame.io — T1 master asset library, QC + client review'],tools:[{l:'GenStudio',k:'ai'},{l:'KREA AI',k:'ai'},{l:'ElevenLabs',k:'ai'},{l:'Frame.io'}]},
+      ba:[{tag:'T1 BA',k:'t1',title:'Rights + clearance',desc:'Music + talent rights cleared for all US adaptations · ACTRA + SAG-AFTRA + UDA compliance confirmed · synthetic V/O disclosed per NY law'},{tag:'Fin Ops',k:'fin',desc:'T1 BCR updated as work completes · T1 estimates tracked by brand + project term · PO receipt confirmed with GMCC Fin Ops'}]},
+    {num:'04',name:'T2 Adaptation',sub:'RMAB + CSMAB',
+      account:{who:'Regional Account Leads + ADs',langs:['EN','FR'],tasks:['RMAB + CSMAB regional briefs active — all 15+ associations','Integrated Messaging Calendar maintained — daily by regional leads','Mid-month reviews provided · competitive updates distributed','Dealer Relations Manager: bilingual dealer comms active'],fte:'4.0 FTE — all T2 account'},
+      craft:{who:'CD T2 + Art Directors (EN + FR) + Copywriters',tasks:['10% Adapt: offer swap — Chevy ~450, GMC/Buick ~330, Cadillac ~250','60% Reference: positioning, vehicle, background, region-specific','30% Net new: regional needs, non-AOR media, interscrollers','DCO banners: 3–5 images/nameplate, content matrix up to 80 rows'],fte:'3.0 FTE — creative + bilingual'},
+      delivery:{who:'Studio EPs + Producers + Makers',tasks:['Studio Artists ×7 (Toronto ×4, Montreal ×1, Vancouver ×2)','Motion/Video Editors ×4 (Toronto ×2, Quebec ×1, Vancouver ×1)','QA Brand Compliance Leads ×3 — Eastern, Quebec, Western','Traffic + Asset Manager: Smartsheet updates, DAOR handoff, DAM'],fte:'8.0 FTE — studio + makers'},
+      tech:{who:'Automation Eng + Platform Director + Front-End Dev',tasks:['GenStudio: ~3,260 assets/month (EN+FR) — GenStudio variant generation','DCO content matrix: Smartsheet populated per nameplate','Automation templates: DDN, mastheads, badges at scale','Front-End Dev: HTML5 banners, rich media, interscrollers'],tools:[{l:'GenStudio at scale',k:'ai'},{l:'Smartsheet DCO',k:'gm'},{l:'Frame.io'},{l:'Neurons pre-launch',k:'ai'}]},
+      ba:[{tag:'Senior BA',k:'t2',title:'T2 legal review',desc:'All net-new assets through external legal counsel · Canadian automotive ad standards QA · QC language law FR assets confirmed'},{tag:'BA Coordinator',k:'coord',desc:'Ziflow proofs created per asset type · internal pre-review stage cleared · GM legal checklist applied · revision rounds tracked (rounds 5+ flagged)'},{tag:'Fin Ops',k:'fin',desc:'T2 BCRs updated per RMAB + CSMAB entity (~30 entities) · monthly accruals prepared · offer round overage billing triggered where applicable'}]},
+    {num:'05',name:'QA + Legal',sub:'Ziflow gate',
+      account:{who:'PM T2 + Account Leads',tasks:['Internal stakeholder review coordinated','Client feedback consolidated before Ziflow','P1 escalation monitored — 60 min response if triggered'],fte:'1.0 FTE'},
+      craft:{who:'QA Brand Compliance Leads ×3',tasks:['Brand compliance QA — all 4 brands, EN + FR','QA checklists: video, digital/HTML5, print per asset type','French language quality review — Quebec QC Lead'],fte:'1.5 FTE'},
+      delivery:{who:'BA Coordinator + Senior BA Lead',tasks:['Internal pre-review stage cleared first','Ziflow proof created — naming convention, version control','GM Canada legal advertising checklist attached to every proof','Changes marked on all subsequent review rounds'],fte:'1.5 FTE'},
+      tech:{who:'Data / Analytics Specialist',tasks:['Neurons pre-launch creative scoring run on net-new assets','Smartsheet SLA clock — P1/P2/P3/P4 alerts automated','Ziflow approval status synced back to Smartsheet row'],tools:[{l:'Ziflow',k:'gm'},{l:'Neurons',k:'ai'},{l:'Smartsheet',k:'gm'}]},
+      ba:[{tag:'Senior BA',k:'t2',title:'Ziflow ownership',desc:'Agency legal review complete before GM sees any asset · external counsel engaged on net-new · provincial standards confirmed · bilingual QA signed off'},{tag:'BA Coordinator',k:'coord',desc:'Proofs tracked, versions locked · old versions auto-locked on upload · revision round counter updated in BCR'}]},
+    {num:'06',name:'Distribution',sub:'24hr delivery',
+      account:{who:'Traffic + Asset Manager + Regional ADs',tasks:['Assets + traffic sheets → Media AOR within 24hr of approval','Final image + copy → DAOR within 24hr','T3 hero banners → Dealer Digital Solution Agency','Monthly brand blocking charts shared with all regions'],fte:'1.5 FTE'},
+      craft:{who:'Art Directors + Copywriters',tasks:['Final asset QA before trafficking','French translation sign-off — Montreal team','Awards / JD Power packages distributed ad hoc'],fte:'0.5 FTE'},
+      delivery:{who:'Studio Ops + Producers',tasks:['Frame.io final delivery — approved assets packaged','Asset Central + Asset IQ upload — GM tagging + taxonomy applied','Global DAM + dealer-accessible DAM both updated','Opal return loop — finished assets populate GM calendar'],fte:'1.5 FTE'},
+      tech:{who:'Platform Director + Automation Engineer',tasks:['Frame.io → Opal integration fires on asset approval','Smartsheet all rows updated to "Delivered" status','Asset Central upload automated where possible','DCO trafficking sheets submitted via Smartsheet to Media AOR'],tools:[{l:'Frame.io'},{l:'Asset Central/IQ',k:'gm'},{l:'Opal'},{l:'Smartsheet',k:'gm'},{l:'Google Drive',k:'google'},{l:'Looker Studio',k:'google'}]},
+      ba:[{tag:'Fin Ops',k:'fin',title:'Post-delivery billing',desc:'Invoices issued per association in standardized format · accruals finalized for the period · BCR status updated to "delivered + billed"'},{tag:'Senior BA',k:'t2',desc:'Pass-through tool costs documented + billed net (no markup) · rights usage period start date logged for residual tracking'}]},
+    {num:'07',name:'Social — A1.1',sub:'All 4 brands EN+FR',numTone:'good',
+      account:{who:'Social Strategist + Social Strategist Quebec',langs:['EN','FR'],tasks:['Annual platform audit + best practice review all brands','Content calendar built — US aligned, Canadian events layered','Chevy FR Instagram managed as independent editorial stream','Event support: Grand Prix, Stampede, MLS, Auto Shows, F1','Earned alignment with PR/comms counterparts','Paid social boosting strategy — high-performing organic'],fte:'2.0 FTE — Social Strategists EN+FR'},
+      craft:{who:'Content Creators ×6 (EN + FR per brand)',tasks:['6–8 CA original/adapted posts per quarter per brand','Vertical video (Reels, TikTok) — EN + FR versions','Static, carousels, OLV — all formats + aspect ratios','YouTube: captions, thumbnails, keywords, tags, descriptions','Quebec FR: distinct editorial voice — not translated EN'],fte:'6.0 FTE — Content Creators (3 EN + 3 FR)',tools:[{l:'Adobe GenStudio',k:'ai'},{l:'Google Workspace',k:'google'}]},
+      delivery:{who:'Art Director FR + Copywriter FR + QA Quebec Leads',tasks:['Community management: daily monitoring + response, all channels','Dealer asset tool: upload + maintain assets for dealer use','Publishing: Meta, Instagram (EN+FR), YouTube, TikTok, X','Reactive content: trends, issues, ad hoc announcements','Weekly/monthly/quarterly analytics reporting all brands'],fte:'Shared — Art Director FR + CW FR + QA MTL'},
+      tech:{who:'Data/Analytics Specialist + Platform Director',tasks:['Google Analytics 4 — social traffic + conversion tracking','Google Looker Studio — weekly/monthly social dashboards','Sprout Social / Dash Hudson — publishing + community mgmt','YouTube Studio — channel management + analytics','Google Ads — paid social boost integration'],tools:[{l:'GA4',k:'google'},{l:'Looker Studio',k:'google'},{l:'Google Ads',k:'google'},{l:'Sprout Social'}]},
+      ba:[{tag:'Senior BA',k:'t2',title:'Social rights',desc:'Music rights for social video · influencer agreements · UGC rights management · platform terms compliance EN+FR'},{tag:'Analytics',k:'coord',desc:'Social performance feeds back into next brief via Airtable IMC · BERA.ai brand equity per channel · weekly reports to GM Canada brand teams'}]},
+    {num:'08',name:'Measure + Adapt',sub:'Loop → next brief',
+      account:{who:'Regional ADs + GBL + PM T2',tasks:['Monthly campaign reviews — success factors + forward recs','RMAB + CSMAB satisfaction surveys developed + actioned','Quarterly plan reviews with GM Canada brand teams','Annual strategic planning session'],fte:'2.0 FTE'},
+      craft:{who:'GSD + Creative Directors',tasks:['Performance data informs next brief — top assets flagged','Competitive review ×4 brands · forward creative direction','Bi-annual innovation briefs'],fte:'0.5 FTE'},
+      delivery:{who:'Data/Analytics Specialist + Traffic Mgr',tasks:['CRM + RO data integrated (CSMAB) · Looker Studio dashboards','Performance signals feed directly into next adapt brief','Competitive tracking maintained · market updates'],fte:'1.5 FTE'},
+      tech:{who:'Platform Director + Data/Analytics Specialist',tasks:['BERA.ai: brand equity scoring per brand/region — feeds next brief','Airtable: performance patterns surface in IMC for next cycle','Google Looker Studio: campaign performance dashboards to GM Canada','Google Analytics 4: website + offer page performance by region','SA360: search campaign reporting + optimization signals'],tools:[{l:'BERA.ai',k:'ai'},{l:'Airtable IMC'},{l:'Looker Studio',k:'google'},{l:'GA4',k:'google'},{l:'SA360',k:'google'}]},
+      ba:[{tag:'Fin Ops',k:'fin',title:'Monthly + bi-annual close',desc:'BCR ×30 entities reviewed · annual fee recalculation per stakeholder · bi-annual hour reconciliation per association'},{tag:'BA Coordinator',k:'coord',desc:'Hour logs compiled · billing formats confirmed · reconciliation data prepared for Head of BA sign-off'}]},
+  ],
+  WF_FOOTER: [
+    {title:'Account + PM — 16 roles',body:'Group Business Lead · MDs ×3 · Group ADs ×3 · ADs ×3 · AMs ×3 · PMs ×2'},
+    {title:'Creative + Social + Content — 23 roles',body:'CCO · ECD · Creative Leads ×4 · AD EN+FR · CW EN+FR · Content Creators ×6 EN+FR · Social Strategists ×2 · GSD · Strategy Dir · Data/Analytics'},
+    {title:'Production + Studio + QA — 26 roles',body:'CPO · EPs ×2 · Dir. Studio Tech · Producers ×5 · Studio Artists ×7 · Motion/Video Editors ×2 · FE Devs ×2 · Automation Eng · QA Leads ×5'},
+    {title:'BA + Finance — 3 roles',body:'Senior BA Lead T2 · BA Coordinator T2 · Financial Ops Manager'},
+    {title:'Google Stack',body:'GA4 · Looker Studio · SA360 · Google Ads · Google Workspace · Google Drive · YouTube Studio · DV360'},
+  ],
+  STAFF_META: [
+    {k:'Total GM client hours',v:'97,020'},{k:'Total internal hours',v:'34,980'},
+    {k:'Total all hours',v:'132,000'},{k:'Roles submitted',v:'65 · FTE (GM): 50.5'},
+  ],
+  STAFF_BRANDS: [
+    {name:'Chevrolet',fte:'17.1',note:'1,305 assets/mo EN+FR (×3 DDN versions)',hi:true},
+    {name:'Cadillac',fte:'7.9',note:'650 assets/mo EN+FR'},
+    {name:'Buick + GMC',fte:'13.7',note:'450 assets/mo EN+FR combined'},
+    {name:'Crossbrand',fte:'5.0',note:'165 assets/mo · 12 hrs/asset'},
+    {name:'Other',fte:'5.0',note:'165 assets/mo · 12 hrs/asset'},
+  ],
+  STAFF_TOTALS: [
+    {v:'65',l:'Total roles submitted'},{v:'97,020',l:'Total GM client hours'},
+    {v:'50.5',l:'Total FTE (GM clients)'},{v:'132,000',l:'Total hours all sources'},
+  ],
+  STAFF_DEPTS: [
+    {key:'account',label:'Account Services',count:'14 roles'},
+    {key:'pm',label:'Project Management',count:'2 roles'},
+    {key:'strategy',label:'Strategy, Planning, Analytics + Social',count:'5 roles',note:'includes A1.1 Social'},
+    {key:'creative',label:'Creative + Content Creators',count:'16 roles',note:'EN + FR bilingual creative'},
+    {key:'production',label:'Production',count:'9 roles'},
+    {key:'studio',label:'Studio Artists, Post Production + Digital',count:'12 roles'},
+    {key:'qa',label:'QA Brand Compliance',count:'5 roles'},
+    {key:'ba',label:'Business Affairs + Finance',count:'3 roles'},
+  ],
+  STAFF: {
+    account:[
+      {title:'Quebec Managing Director',loc:'Montreal',type:'E',months:12,gmHrs:270,intHrs:1730,fte:0.14},
+      {title:'Western Managing Director',loc:'Vancouver',type:'E',months:12,gmHrs:270,intHrs:1730,fte:0.14},
+      {title:'Central Managing Director',loc:'Toronto',type:'E',months:12,gmHrs:270,intHrs:1730,fte:0.14},
+      {title:'Group Business Lead',loc:'Toronto',type:'E',months:12,gmHrs:450,intHrs:1550,fte:0.23},
+      {title:'Chevy Group Account Director',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Buick + GMC Group Account Director',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Cadillac + Crossbrand + Other Group Account Director',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Western Account Director',loc:'Vancouver',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Central Account Director',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Quebec Account Director',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Quebec Account Manager',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Quebec Account Manager',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Western Account Manager',loc:'Vancouver',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Central Account Manager',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+    ],
+    pm:[
+      {title:'Project Manager T2',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Quebec Project Manager T2',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+    ],
+    strategy:[
+      {title:'Group Strategy Director (Common T1/T2)',loc:'Toronto',type:'E',months:12,gmHrs:270,intHrs:1730,fte:0.14},
+      {title:'Strategy Director — Bilingual',loc:'Toronto',type:'E',months:12,gmHrs:900,intHrs:1100,fte:0.47},
+      {title:'Data / Analytics Specialist',loc:'Toronto',type:'E',months:12,gmHrs:900,intHrs:1100,fte:0.47},
+      {title:'Social Strategist',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Social Strategist — Quebec',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+    ],
+    creative:[
+      {title:'Chief Creative Officer',loc:'Toronto',type:'E',months:12,gmHrs:180,intHrs:1820,fte:0.09},
+      {title:'Executive Creative Director (Common T1/T2)',loc:'Toronto',type:'E',months:12,gmHrs:270,intHrs:1730,fte:0.14},
+      {title:'Chevy Creative Lead T2',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Buick + GMC Creative Lead T2',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Cadillac + Crossbrand + Other Creative Lead T2',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Quebec Creative Lead T2',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Art Director — ENG',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Art Director — FR',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Copywriter — ENG',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Copywriter — FR',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Chevy — Content Creator',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Buick + GMC — Content Creator',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Cadillac + Crossbrand + Other — Content Creator',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Chevy — Content Creator Quebec',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Buick + GMC — Content Creator Quebec',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Cadillac + Crossbrand + Other — Content Creator Quebec',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+    ],
+    production:[
+      {title:'Chief Production Officer',loc:'NYC',type:'E',months:12,gmHrs:270,intHrs:1730,fte:0.14},
+      {title:'Executive Producer — Common T1/T2 Agency',loc:'Toronto',type:'E',months:12,gmHrs:270,intHrs:1730,fte:0.14},
+      {title:'Executive Producer T2 — Studio',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Director of Studio Tech + Integration (Common T1/T2)',loc:'Toronto',type:'E',months:12,gmHrs:900,intHrs:1100,fte:0.47},
+      {title:'Chevy Producer',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Buick + GMC Producer',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Cadillac + Crossbrand + Other Producer',loc:'Vancouver',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Quebec Producer',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Quebec Producer',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+    ],
+    studio:[
+      {title:'Central Studio Artist',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Central Studio Artist',loc:'Toronto',type:'E',months:12,gmHrs:900,intHrs:1100,fte:0.47},
+      {title:'Central Studio Artist',loc:'Toronto',type:'E',months:12,gmHrs:900,intHrs:1100,fte:0.47},
+      {title:'Central Studio Artist',loc:'Toronto',type:'E',months:12,gmHrs:900,intHrs:1100,fte:0.47},
+      {title:'Quebec Studio Artist',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Western Studio Artist',loc:'Vancouver',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Western Studio Artist',loc:'Vancouver',type:'E',months:12,gmHrs:900,intHrs:1100,fte:0.47},
+      {title:'Central Motion/Video Editor',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Western Motion/Video Editor',loc:'Vancouver',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Front End Developer/Motion Designer (Senior)',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Front End Developer/Motion Designer',loc:'Toronto',type:'E',months:12,gmHrs:900,intHrs:1100,fte:0.47},
+      {title:'Automation / Template Engineer',loc:'Toronto',type:'E',months:12,gmHrs:900,intHrs:1100,fte:0.47},
+    ],
+    qa:[
+      {title:'QA Brand Compliance Lead — Chevy',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'QA Brand Compliance Lead — Buick + GMC',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'QA Brand Compliance Lead — Cadillac + Crossbrand + Other',loc:'Vancouver',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'QA Brand Compliance Lead — Quebec (T1/T2)',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'QA Brand Compliance Lead — Quebec (T1/T2)',loc:'Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+    ],
+    ba:[
+      {title:'Senior Business Affairs Lead T2 — Bilingual',loc:'Toronto/Montreal',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Business Affairs Coordinator T2',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+      {title:'Financial Ops Manager',loc:'Toronto',type:'E',months:12,gmHrs:1800,intHrs:200,fte:0.94},
+    ],
   },
-  WF_INTAKE_ROLES: [{name:'GM MAS',resp:'Issues the activation brief',tool:'PDF brief'},{name:'Account Lead',resp:'Receives & qualifies the brief',tool:'Smartsheet'}],
+  ROADMAPS: {
+    '90':{eyebrow:'Transition + go-live',title:'90-Day',accent:'Launch Plan',sub:'Foundation → Build + Integrate → Operational Readiness. Day-1 ready before the 30-day cycle begins.',
+      meta:[{k:'SOW requirement',v:'Fully staffed before transition begins'},{k:'SLA active',v:'Day 1 of live operations'},{k:'P1 response',v:'60 min from Day 1'},{k:'Monthly volume target',v:'~1,100+ assets'}],
+      phases:[{num:'01',name:'Foundation',range:'Days 1 – 30',tone:'purple'},{num:'02',name:'Build + Integrate',range:'Days 31 – 60',tone:'amber'},{num:'03',name:'Operational Readiness',range:'Days 61 – 90',tone:'cyan'}],
+      sections:[
+        {label:'People',req:'SOW: Fully staffed before transition with prior agency begins',tracks:[
+          {name:'Agency + Studio Staffing',owner:'CPO + Head of Agency Production + Dir. Studio Tech',cells:[
+            {ms:[{tone:'purple',title:'All confirmed hires offers extended',body:'Group Business Lead confirmed · Agency EP T1/T2 confirmed · Group EPs (Central, Quebec, Western) confirmed · Dir. Studio Tech + Integration confirmed · Regional account leads (Vancouver, Toronto, Montreal) confirmed',tag:'Day 1 — Knockout criteria'},{tone:'purple',title:'Montreal bilingual capability documented',body:'Francophone headcount confirmed · QC language law compliance signed off · Montreal office operational for RFP response',tag:'Knockout criteria'}]},
+            {ms:[{tone:'amber',title:'Studio producers + makers onboarded',body:'All Studio Artists ×7 · Motion/Video Editors ×4 · QA Brand Compliance Leads ×3 confirmed and hub-assigned. GM brand standards training complete.'},{tone:'amber',title:'EP Post + Finishing confirmed',body:'Offer extended or freelance bridge in place. V/O production pipeline briefed. ElevenLabs access provisioned. Monthly broadcast cycle begins Day 61.',tag:'Critical path hire'}]},
+            {ms:[{tone:'cyan',title:'All 65 roles operational',body:'Full team confirmed across Vancouver, Toronto, Montreal, NYC. GM vehicle + incentive training complete for all staff. Tool access verified across all hubs.'}],gate:'Gate: Fully staffed — transition with prior agency can begin'}]},
+          {name:'Business Affairs + Fin Ops',owner:'CPO + Senior BA Lead T2',cells:[
+            {ms:[{tone:'gray',title:'Head of BA hired + Senior BA Lead T2 confirmed',body:'NYC · SAG-AFTRA + ACTRA + UDA fluency required. AI proficiency required. JD posted Day 1. External legal counsel identified in Canada for automotive ad standards.',tag:'Critical path'}]},
+            {ms:[{tone:'gray',title:'BA scope mapped + BCR structure built',body:'~30 legal entity BCR templates built per format agreed with GM Canada Fin Ops. T1 + T2 billing separated. Monthly accrual process documented. Synthetic performer disclosure protocol live.'}]},
+            {ms:[{tone:'gray',title:'First BCR submitted on time',body:'Month 1 BCR delivered to GM Canada Fin Ops. Monthly billing confirmed in standardized format per entity. Bi-annual reconciliation protocol documented.'}],gate:'Gate: Financial ops live'}]}]},
+        {label:'Systems',req:'SOW: All GM systems live — Asset Central, Asset IQ, Ziflow, Smartsheet',tracks:[
+          {name:'GM Systems Access',owner:'Dir. Studio Tech + Integration',cells:[
+            {ms:[{tone:'green',title:'Access requests submitted — all systems',body:'Asset Central, Asset IQ, Ziflow admin, Smartsheet admin, GM DAM (global + dealer). Submitted Day 1 — provisioning lead time unknown, cannot wait.',tag:'Day 1 action'}]},
+            {ms:[{tone:'green',title:'Ziflow workspace configured',body:'Internal pre-review stage built. Checklist templates: video, digital/HTML5, print, radio. Agency legal → GM legal routing confirmed. Reviewer permissions set.'},{tone:'green',title:'Smartsheet asset register built',body:'Sheet structure agreed with GM Canada. Grouped by campaign → brand → format → language. Status taxonomy confirmed. Smartsheet ↔ Ziflow handoff protocol rehearsed.'}]},
+            {ms:[{tone:'green',title:'All GM systems live + tested',body:'Asset Central + IQ upload tested with sample assets. GM tagging taxonomy applied. Global + dealer DAM current. Asset push-to-stakeholder email protocol rehearsed.'}],gate:'Gate: No system blockers to go-live'}]},
+          {name:'Studio Tech Stack + AI',owner:'Dir. Studio Tech + Integration',cells:[
+            {ms:[{tone:'green',title:'Tool procurement complete',body:'Adobe GenStudio · ElevenLabs · KREA AI · Neurons · BERA.ai · Frame.io · Airtable · Zapier — all licenses confirmed. Adobe CC seats allocated to GM team.',tag:'AI SOW requirement'}]},
+            {ms:[{tone:'green',title:'GM brand kits locked in GenStudio',body:'All 4 brand kits ingested and locked: Chevy, GMC, Buick, Cadillac. EN + FR asset templates built. AI QA pass required before any GM asset generated.'},{tone:'green',title:'Airtable IMC live + Opal sync tested',body:'5 views: brand blocking chart, regional offer matrix, channel status, go-live countdown, dealer comms log. Zapier/Opal sync verified. Dir. Studio Tech + Integration owns architecture.'}]},
+            {ms:[{tone:'green',title:'Full stack end-to-end QA run',body:'Opal brief → Airtable IMC → production routing → Studio output → Ziflow review → Frame.io delivery → Opal return loop. No manual re-entry at any stage confirmed.'}],gate:'Gate: AI layer active end-to-end'}]}]},
+        {label:'Transition',req:'SOW: Fully staffed before overlap with prior agency begins — non-negotiable sequence',tracks:[
+          {name:'Prior Agency Transition',owner:'Stef + Alexander',cells:[
+            {ms:[{tone:'red',title:'Transition plan agreed with GM Canada',body:'Timeline confirmed. Prior agency notified. Knowledge transfer scope: asset library, brand guidelines, active campaigns, in-flight legal reviews, open BCRs.',tag:'Cannot begin until fully staffed'}]},
+            {ms:[{tone:'red',title:'Asset library transfer + shadow run',body:'All historical master assets transferred to Frame.io, tagged and archived. Rethink Studio runs one full T2 campaign cycle in parallel with prior agency. Gap analysis documented.'}]},
+            {ms:[{tone:'red',title:'Transition complete',body:'All open work transferred. No outstanding legal reviews, BCRs, or in-flight campaigns with prior agency. Clean handover confirmed with GM Canada.'}],gate:'Gate: Rethink sole agency of record'}]},
+          {name:'SLA + Day-1 Protocol',owner:'Alexander + all leads',cells:[
+            {ms:[{tone:'red',title:'SLA framework documented',body:'P1–P4 mapped to roles. P1 on-call model designed. 24hr digital · 48hr print · 7-day audio. Monthly cycle day-1 protocol written.'}]},
+            {ms:[{tone:'red',title:'P1 protocol live drill run',body:'Simulated urgent legal/offer change. 60-min response window tested. Smartsheet P1 alert automation confirmed. Ziflow expedited review stage live.'}]},
+            {ms:[{tone:'red',title:'All SLAs active — Day 1',body:'P1–P4 coverage confirmed all hubs. After-hours coverage model live for Toronto. Day-1 readiness confirmed for Month 1 30-day cycle.',tag:'SOW contractual obligation'}],gate:'Gate: Day-1 readiness — ~3,260 assets/month EN+FR capacity live'}]}]},
+      ],
+      summary:[{num:'4',label:'Hard knockout criteria to clear before Day 1 of transition'},{num:'~30',label:'Legal entities requiring BCR configuration and monthly billing'},{num:'3,260+',label:'Combined EN+FR monthly T2 assets by Day 90'},{num:'60 min',label:'P1 SLA response window active from Day 1 of live operations'}],
+      crit:'Critical path: Head of BA hire · EP Post + Finishing · GM systems access (request Day 1 — lead time unknown) · prior agency transition cannot begin until fully staffed'},
+    '6':{eyebrow:'Months 4–6',title:'Adapt, Learn',accent:'+ Modify',sub:'System is live. Now we optimize. Data feeds back into workflow. AI throughput measured. Relationships deepen. Volume scales.',
+      meta:[{k:'Focus',v:'Performance · efficiency · relationship depth'},{k:'Monthly volume',v:'Hitting 3,260+ EN+FR assets consistently'},{k:'Key event',v:'First bi-annual hour reconciliation'},{k:'Milestone',v:'RMAB satisfaction survey deployed'}],
+      phases:[{num:'M4',name:'Month 4 — Stabilise',range:'First full cycle review',tone:'purple'},{num:'M5',name:'Month 5 — Optimise',range:'Data-driven improvements',tone:'amber'},{num:'M6',name:'Month 6 — Scale',range:'Bi-annual close + innovation',tone:'cyan'}],
+      sections:[{label:null,req:null,tracks:[
+        {name:'Operations',owner:'Alexander + Adam',cells:[
+          {ms:[{tone:'purple',title:'3-cycle post-mortem',body:'First three 30-day cycles reviewed. SLA performance logged. Bottlenecks identified. P1 response time average documented. Day-1 readiness score per cycle.'},{tone:'purple',title:'Workflow gap analysis actioned',body:'Any friction points from shadow run and live cycles addressed. Smartsheet structure refined. Ziflow review stage timing reviewed against actual cycle data.'}]},
+          {ms:[{tone:'amber',title:'Offer change round analysis',body:'How many campaigns exceeded 4 rounds? Are there patterns by brand, region, or offer type? Use data to proactively brief GM Canada on round-5+ cost implications.'},{tone:'amber',title:'Special Initiatives cadence established',body:'Up to 2 SIs per region per quarter running smoothly. 15 business day lead time consistently met. Net-new creative quality reviewed against brand standards.'}]},
+          {ms:[{tone:'cyan',title:'First bi-annual hour reconciliation',body:'Hour reconciliation per association — all ~30 RMAB + CSMAB entities. Head of BA + Financial Ops joint exercise. Reconciliation report issued to each association in standardized format.',tag:'SOW financial obligation'}],gate:'Gate: Financial reconciliation complete — all entities'}]},
+        {name:'AI + Tech',owner:'Alexander + Platform Dir',cells:[
+          {ms:[{tone:'green',title:'AI throughput baseline established',body:'GenStudio output volume measured. Percentage of assets requiring human revision tracked. Baseline: what percentage of adapt + reference work is fully AI-generated vs AI-assisted?'}]},
+          {ms:[{tone:'green',title:'Automation rules engine refined',body:'Airtable classification accuracy reviewed — how often did AI classification match actual routing? Rules updated. Smartsheet automation triggers tuned based on 3 cycles of data.'},{tone:'green',title:'Neurons pre-launch scoring integrated into QA',body:'Pre-launch scoring now standard for all net-new assets. Scoring data correlated against actual campaign performance. Top-performing creative patterns identified by brand.',tag:'AI pitch proof point'}]},
+          {ms:[{tone:'green',title:'BERA.ai brand equity baseline complete',body:'6-month brand equity performance data per brand and region. First BERA.ai → brief feedback loop run. Regions with underperforming brand equity flagged for creative brief refresh.'}],gate:'Gate: AI loop closed — data informs next cycle briefs'}]},
+        {name:'Client Relationships',owner:'Adam + Stef + Regional ADs',cells:[
+          {ms:[{tone:'purple',title:'RMAB satisfaction survey deployed',body:'Annual RMAB satisfaction survey developed and sent to all regional associations. SOW Section 1.3 — action plan to address feedback prepared by Group Business Lead and regional Account Directors.',tag:'SOW requirement'}]},
+          {ms:[{tone:'amber',title:'CSMAB in-person dealer meetings',body:'First round of in-person dealer meetings (2–3 per year per CSMAB). Regional account leads + CSMAB AD. Board-level relationships established. Dealer feedback on creative and asset quality documented.',tag:'SOW requirement'}]},
+          {ms:[{tone:'cyan',title:'Monthly financial reviews established as rhythm',body:'Monthly financial overview deck for senior GM clients running consistently. BCR visibility at senior level confirmed. Scope change quote process fully understood by all GM stakeholders.'}],gate:'Gate: Client relationships — trust and rhythm established'}]},
+        {name:'Studio Regional',owner:'Alexander + EPs',cells:[
+          {ms:[{tone:'purple',title:'Vancouver + Montreal Studio EP promotions confirmed',body:'Promote-from-within decisions made for both open regional Studio EP seats. Transition from interim coverage to permanent EPs. Regional studio capacity formally established.'}]},
+          {ms:[{tone:'amber',title:'Regional hub capacity reviewed',body:'Asset volume per hub measured against maker capacity. Are any hubs running over or under? FTE mix (employee vs freelance) reviewed against volume patterns. Adjustments made.'}]},
+          {ms:[{tone:'cyan',title:'First innovation brief developed',body:'Bi-annual innovation brief — SOW Section 1.6. New format types, emerging platforms, AI-assisted creative directions proposed. Presented to GM Canada in the Month 6 strategic session.',tag:'SOW bi-annual obligation'}],gate:'Gate: Regional studios fully independent — Month 7 ready'}]}]}]},
+    '12':{eyebrow:'Months 7–12',title:'Refine',accent:'+ Rethink',sub:'The machine is running. Now we make it irreplaceable. Annual strategic planning. Fee recalibration. Full AI integration. Next year set.',
+      meta:[{k:'Focus',v:'Strategic lock-in · efficiency gains · Year 2 setup'},{k:'Key events',v:'Annual planning · fee recalculation'},{k:'Milestone',v:'Second bi-annual reconciliation'},{k:'Goal',v:'Rethink indispensable to GM Canada'}],
+      phases:[{num:'M7–8',name:'Consolidate',range:'Full volume + deep integration',tone:'purple'},{num:'M9–10',name:'Elevate',range:'Creative ambition + AI expansion',tone:'amber'},{num:'M11–12',name:'Year 2 Ready',range:'Annual close + planning locked',tone:'cyan'}],
+      sections:[{label:null,req:null,tracks:[
+        {name:'Operations',owner:'Alexander + Adam + BA',cells:[
+          {ms:[{tone:'purple',title:'Full operational rhythm locked',body:'7+ consecutive 30-day cycles at full volume. Day-1 readiness consistent. P1 response average well within 60 minutes. Prior agency shadow is a distant memory — Rethink owns this fully.'},{tone:'purple',title:'Scope boundary management mature',body:'Retainer vs. overage clearly understood by all GM stakeholders. Quote-before-work culture established for rounds 5+ and additional SIs. No scope creep surprises.'}]},
+          {ms:[{tone:'amber',title:'CSMAB data integration deepened',body:'CRM + RO data fully integrated into CSMAB performance reporting. Certified Service ROI model built. Looker Studio dashboards connected to BCR + campaign data — live for GM leadership.',tag:'SOW CSMAB Section 1.9'}]},
+          {ms:[{tone:'cyan',title:'Second bi-annual hour reconciliation',body:'All ~30 entities reconciled. Annual fee recalculation per stakeholder — reflecting actual scope vs. estimated scope. Any adjustments proposed to GM Canada for Year 2.',tag:'SOW financial obligation'}],gate:'Gate: Year-end financial close — all entities reconciled'}]},
+        {name:'Creative + Strategy',owner:'GSD + CDs + Stef',cells:[
+          {ms:[{tone:'purple',title:'Performance-informed creative briefs standard',body:'Every new brief is enriched with BERA.ai brand equity data, Neurons scoring patterns, and Airtable IMC historical performance. "Never starting from scratch" is the operating principle.'}]},
+          {ms:[{tone:'amber',title:'Second innovation brief developed',body:'Bi-annual innovation brief — Month 10. Based on 9 months of performance data. AI-generated creative format tests proposed. New channel formats (retail media, CTV innovations) scoped.',tag:'SOW bi-annual obligation'},{tone:'amber',title:'Creative quality elevation programme',body:'Net-new (30%) quality review across 4 brands. Are adaptation-tier assets starting to feel stale? Creative refresh brief written for any underperforming brand.'}]},
+          {ms:[{tone:'cyan',title:'Annual strategic planning session',body:'Full-day session with GM Canada. Year 1 performance review. Year 2 scope, budgets, and priorities set. New formats, new RMABs, new CSMAB regions scoped. Innovation roadmap presented.',tag:'SOW annual requirement'}],gate:'Gate: Year 2 creative direction locked'}]},
+        {name:'AI + Innovation',owner:'Alexander + Platform Dir',cells:[
+          {ms:[{tone:'green',title:'AI efficiency gains documented + reported',body:'What percentage of the ~3,260 monthly EN+FR assets are now fully AI-generated vs AI-assisted vs human-led? Time-per-asset trend tracked. Efficiency story built for GM Canada leadership.'}]},
+          {ms:[{tone:'green',title:'Next-generation AI tools evaluated',body:'Platform Director reviews emerging tools against GM Canada use cases. Proposals for Year 2 AI integration submitted — e.g. dynamic video personalization, real-time offer integration, voice synthesis expansion.'}]},
+          {ms:[{tone:'green',title:'AI responsibility framework reviewed',body:'Green/Yellow/Red framework audited against 12 months of use. Any new AI tools added. Synthetic performer disclosure updated for any regulatory changes. MSA AI compliance reviewed with Head of BA.'}],gate:'Gate: Year 2 AI roadmap approved by GM Canada'}]},
+        {name:'Client + Growth',owner:'Adam + Stef + Jon',cells:[
+          {ms:[{tone:'purple',title:'Second CSMAB in-person dealer round',body:'Second of the 2–3 annual in-person dealer meetings. Relationships at board level are deep. Dealer feedback directly informs the annual planning session.'},{tone:'purple',title:'CSMAB satisfaction survey Year 2',body:'Annual survey deployed. Year 1 action plan reviewed vs results. Year 2 service improvements proposed. SOW requirement met on schedule.',tag:'SOW annual requirement'}]},
+          {ms:[{tone:'amber',title:'Scope expansion opportunities identified',body:'Are there T1 brands not yet with Rethink that could be added? New RMAB regions? CSMAB new market entries? Growth opportunities documented and presented to leadership.'}]},
+          {ms:[{tone:'cyan',title:'Year 2 contract + scope finalised',body:'Annual fee recalculation complete. Scope adjustments (new brands, new regions, volume changes) agreed. Year 2 staffing plan updated if scope changes. Rethink renews with stronger position than Day 1.'}],gate:'Gate: Year 2 contract signed — Rethink indispensable'}]}]}],
+      year1:[{v:'~39,120+',l:'Assets delivered',note:'~3,260/month EN+FR × 12 months',hi:true},{v:'360+',l:'BCRs submitted',note:'~30 entities × 12 months'},{v:'2',l:'Bi-annual reconciliations',note:'All ~30 entities reconciled twice'},{v:'12',l:'Consecutive Day-1 cycles',note:'Every 30-day cycle delivered on time'}]},
+  },
 
   allCampaigns(){ return this.state.added ? this.CAMPAIGNS.concat([this.IMPORTED]) : this.CAMPAIGNS; },
   findCampaign(id){ return this.allCampaigns().find(c => c.id === id); },
@@ -145,9 +393,12 @@ const App = {
   parseBrief(){ this.setState({pdfStep:1,pdfReveal:0}); clearInterval(this._pt);
     this._pt = setInterval(() => { this.setState(s => { if(s.pdfReveal>=7){ clearInterval(this._pt); return {pdfStep:2}; } return {pdfReveal:s.pdfReveal+1}; }); }, 360); },
   addToCalendar(){ clearInterval(this._pt); this.setState({added:true,pdfOpen:false,pdfStep:0,screen:'calendar',filter:'all',addedId:'trax'}); },
-  goWorkflow(){ this.setState({screen:'workflow',campaignId:null,flightId:null,wfSel:null}); },
-  openStep(sel){ this.setState({wfSel:sel}); },
-  closeStep(){ this.setState({wfSel:null}); },
+  goWorkflow(){ this.setState({screen:'workflow',campaignId:null,flightId:null}); },
+  goDelivery(){ this.setState({screen:'delivery',campaignId:null,flightId:null}); },
+  goStaffing(){ this.setState({screen:'staffing',campaignId:null,flightId:null}); },
+  goRoadmap(){ this.setState({screen:'roadmap',campaignId:null,flightId:null}); },
+  setLayer(l){ this.setState({wfLayer:l}); },
+  setRoadmap(r){ this.setState({roadmap:r}); },
 
   buildCampaignDetail(c){
     const ST = this.ST, DIV = this.DIV; const today = this.D('2026-06-11');
@@ -224,12 +475,13 @@ const App = {
 
     // ---- chrome ----
     const navBase = {width:'52px',height:'44px',display:'flex',alignItems:'center',justifyContent:'center',border:'none',borderRadius:'12px',cursor:'pointer',background:'transparent',color:'#7A8694'};
-    const homeOn = S.screen==='overview';
-    const calOn = ['calendar','campaign','creative'].includes(S.screen);
-    const navHomeStyle = Object.assign({},navBase,homeOn?{background:'#1B1E23',color:'#00BCF2'}:{});
-    const navCalStyle = Object.assign({},navBase,calOn?{background:'#1B1E23',color:'#00BCF2'}:{});
-    const wfOn = S.screen==='workflow';
-    const navWfStyle = Object.assign({},navBase,wfOn?{background:'#1B1E23',color:'#00BCF2'}:{});
+    const navOn = (active) => Object.assign({},navBase,active?{background:'#1B1E23',color:'#00BCF2'}:{});
+    const navDeliveryStyle = navOn(S.screen==='delivery');
+    const navWfStyle = navOn(S.screen==='workflow');
+    const navStaffStyle = navOn(S.screen==='staffing');
+    const navRoadmapStyle = navOn(S.screen==='roadmap');
+    const navHomeStyle = navOn(S.screen==='overview');
+    const navCalStyle = navOn(['calendar','campaign','creative'].includes(S.screen));
     const avTxt = {exec:'EX',account:'AC',producer:'PR'}[S.role];
     const roleAvatar = {text:avTxt,style:{width:'40px',height:'40px',borderRadius:'50%',background:'#1B1E23',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'12px',letterSpacing:'.03em',border:'2px solid #2A2E35'}};
 
@@ -240,12 +492,14 @@ const App = {
       onClick:() => this.setRole(k)}));
 
     // ---- breadcrumbs ----
-    let crumbsRaw = [{label:'Overview',go:() => this.goOverview()}];
-    if(S.screen==='overview') crumbsRaw = [{label:'Overview'}];
-    if(S.screen==='workflow') crumbsRaw = [{label:'Overview',go:() => this.goOverview()},{label:'Workflow'}];
-    if(S.screen==='calendar') crumbsRaw = [{label:'Overview',go:() => this.goOverview()},{label:'Marketing calendar'}];
+    let crumbsRaw = [{label:'Delivery Model'}];
+    if(S.screen==='workflow') crumbsRaw = [{label:'Delivery Model',go:() => this.goDelivery()},{label:'Tierless Workflow'}];
+    if(S.screen==='staffing') crumbsRaw = [{label:'Delivery Model',go:() => this.goDelivery()},{label:'Staffing Plan'}];
+    if(S.screen==='roadmap') crumbsRaw = [{label:'Delivery Model',go:() => this.goDelivery()},{label:'Roadmap'}];
+    if(S.screen==='overview') crumbsRaw = [{label:'Live Example'}];
+    if(S.screen==='calendar') crumbsRaw = [{label:'Live Example',go:() => this.goOverview()},{label:'Marketing calendar'}];
     if(S.screen==='campaign'||S.screen==='creative'){ const c = this.findCampaign(S.campaignId);
-      crumbsRaw = [{label:'Overview',go:() => this.goOverview()},{label:'Calendar',go:() => this.goCalendar()},{label:c?c.name:'Campaign',go:S.screen==='creative'?(() => this.openCampaign(S.campaignId)):null}];
+      crumbsRaw = [{label:'Live Example',go:() => this.goOverview()},{label:'Calendar',go:() => this.goCalendar()},{label:c?c.name:'Campaign',go:S.screen==='creative'?(() => this.openCampaign(S.campaignId)):null}];
       if(S.screen==='creative'){ const r = this.findFlight(S.flightId); crumbsRaw.push({label:r?r.f.name:'Flight'}); }
     }
     const crumbs = crumbsRaw.map((c,i) => ({label:c.label,sep:i?'/':'',onClick:c.go||null,
@@ -369,29 +623,13 @@ const App = {
       onClick:() => this.setState({filter:d})}));
     const legend = order.map(k => ({label:ST[k].l,style:{width:'10px',height:'10px',borderRadius:'3px',background:ST[k].c,display:'inline-block'}}));
 
-    // ---- workflow ----
+    // ---- tierless sections (delivery / workflow grid / staffing / roadmap) ----
+    const isDelivery = S.screen==='delivery';
     const isWorkflow = S.screen==='workflow';
-    const wfLegend = this.WF_LANES.map(ln => ({name:ln.name,desc:ln.desc,dotStyle:{width:'10px',height:'10px',borderRadius:'3px',background:ln.color},nameStyle:{fontSize:'11px',fontWeight:'900',letterSpacing:'.06em',color:ln.color}}));
-    const wfPhases = this.WF_PHASES.map((p,pi) => ({num:String(pi+1).padStart(2,'0'),label:p.label,sub:p.sub,
-      lanes:this.WF_LANES.map(ln => ({name:ln.name,desc:ln.desc,
-        nameStyle:{fontSize:'11px',fontWeight:'900',letterSpacing:'.07em',color:ln.color},
-        barStyle:{height:'3px',borderRadius:'2px',background:ln.color,margin:'9px 0 2px'},
-        boxes:(p.boxes[ln.key]||[]).map(b => ({title:b.title,note:b.note,
-          boxStyle:{background:'#fff',border:'1px solid #E7EBEF',borderLeft:'3px solid '+ln.color,borderRadius:'11px',padding:'13px 14px',cursor:'pointer',marginTop:'10px'},
-          linkStyle:{color:ln.color,fontSize:'11px',fontWeight:'800',marginTop:'9px'},
-          onClick:() => this.openStep({phase:p.label,laneName:ln.name,laneKey:ln.key,color:ln.color,title:b.title})}))
-      }))
-    }));
-    const intakeOnClick = () => this.openStep({phase:'Intake',laneName:'GM MAS',laneKey:'intake',color:'#00A7DB',title:'Brief from GM MAS'});
-    let wfPanel = null;
-    if(S.wfSel){ const sel = S.wfSel; const roles = (sel.laneKey==='intake')?this.WF_INTAKE_ROLES:(this.WF_ROLES[sel.laneKey]||[]);
-      wfPanel = {title:sel.title,phase:sel.phase,laneName:sel.laneName,
-        tagStyle:{background:sel.color+'1A',color:sel.color,fontSize:'11px',fontWeight:'800',padding:'4px 11px',borderRadius:'999px',letterSpacing:'.04em'},
-        roles:roles.map(r => ({name:r.name,resp:r.resp,tool:r.tool,
-          avatarStyle:{width:'34px',height:'34px',borderRadius:'50%',background:sel.color,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:'800',flexShrink:'0'},
-          initials:r.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()}))};
-    }
-    const wfOpen = !!S.wfSel;
+    const isStaffing = S.screen==='staffing';
+    const isRoadmap = S.screen==='roadmap';
+    const wfLayer = S.wfLayer;
+    const roadmapKey = S.roadmap;
 
     const cc = this.findCampaign(S.campaignId); const fr = this.findFlight(S.flightId);
     const cd = (S.screen==='campaign'&&cc)?this.buildCampaignDetail(cc):null;
@@ -430,8 +668,10 @@ const App = {
       pdfStep0:S.pdfStep===0,pdfStep1:S.pdfStep===1,pdfStep2:S.pdfStep===2,
       pdfFields,pdfProgressStyle,pdfScanStyle,pdfNewFlights,
       parseBrief:() => this.parseBrief(),addToCalendar:() => this.addToCalendar(),
-      isWorkflow,navWfStyle,goWorkflow:() => this.goWorkflow(),wfLegend,wfPhases,intakeOnClick,wfPanel,wfOpen,
-      closeStep:() => this.closeStep(),wfStop:(e) => { if(e&&e.stopPropagation) e.stopPropagation(); },
+      isDelivery,isWorkflow,isStaffing,isRoadmap,wfLayer,roadmapKey,
+      navDeliveryStyle,navWfStyle,navStaffStyle,navRoadmapStyle,
+      goDelivery:() => this.goDelivery(),goWorkflow:() => this.goWorkflow(),goStaffing:() => this.goStaffing(),goRoadmap:() => this.goRoadmap(),
+      setLayer:(l) => this.setLayer(l),setRoadmap:(r) => this.setRoadmap(r),
     };
   }
 };
@@ -441,6 +681,9 @@ const ICON_HOME = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" s
 const ICON_CAL = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4.5" width="18" height="16.5" rx="2.2"></rect><line x1="3" y1="9.5" x2="21" y2="9.5"></line><line x1="8" y1="2.5" x2="8" y2="6.5"></line><line x1="16" y1="2.5" x2="16" y2="6.5"></line></svg>';
 const ICON_WF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="2.4"></circle><circle cx="5.5" cy="18.5" r="2.4"></circle><circle cx="18.5" cy="18.5" r="2.4"></circle><path d="M12 7.4v3.2M5.5 16.1v-2a1.5 1.5 0 0 1 1.5-1.5h10a1.5 1.5 0 0 1 1.5 1.5v2"></path></svg>';
 const ICON_PLUS = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"></path></svg>';
+const ICON_DELIVERY = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"></path><path d="M3 12l9 5 9-5"></path></svg>';
+const ICON_STAFF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3"></circle><path d="M3.5 20a5.5 5.5 0 0 1 11 0"></path><path d="M16 5.2a3 3 0 0 1 0 5.6"></path><path d="M17.5 14.3A5.5 5.5 0 0 1 20.5 19"></path></svg>';
+const ICON_ROADMAP = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5.5" cy="6" r="2"></circle><circle cx="18.5" cy="18" r="2"></circle><path d="M7.5 6h6a3 3 0 0 1 0 6h-3a3 3 0 0 0 0 6h6"></path></svg>';
 
 /* ---------- view templates ---------- */
 function viewOverview(V){
@@ -614,68 +857,262 @@ function viewCalendar(V){
   </div>`;
 }
 
-function viewWorkflow(V){
-  return `
-  <div style="max-width:1120px;margin:0 auto;">
-    <div style="margin-bottom:16px;">
-      <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0 0 4px;">Workflow</h1>
-      <div style="font-size:13.5px;color:#67727F;">From the GM MAS brief to live creative — across Human, Craft & Delivery. Tap any step to see the roles.</div>
-    </div>
+/* ---------- tierless shared helpers ---------- */
+const TONE = {cyan:'#00A7DB',good:'#0FA697',bad:'#E2455C'};
+const WF_COL_COLOR = {account:'#00A7DB',craft:'#7A5AF0',delivery:'#0FA697',tech:'#2D6FE0',ba:'#E0902A'};
+const RM_TONE = {purple:'#7A5AF0',amber:'#E0902A',cyan:'#00A7DB',green:'#0FA697',gray:'#7A8694',red:'#E2455C'};
+const BA_TAG = {t1:'#2D6FE0',t2:'#00A7DB',coord:'#7A5AF0',fin:'#E0902A'};
+function langTag(l){ const fr = l==='FR'; return `<span style="font-size:8.5px;font-weight:800;letter-spacing:.02em;padding:1px 5px;border-radius:4px;background:${fr?'#FCE7EB':'#E2F6FD'};color:${fr?'#E2455C':'#00A7DB'};">${esc(l)}</span>`; }
+function wfToolPill(t){ const k=t.k||'plain'; const c={ai:'#B24BFF',gm:'#2D6FE0',google:'#4285F4',plain:'#67727F'}[k];
+  return `<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:7px;background:${c}14;border:1px solid ${c}33;color:${c};">${esc(t.l)}</span>`; }
+function noHandoff(){ return `<div style="background:#0B0D10;border-radius:14px;padding:13px 18px;text-align:center;font-size:12.5px;font-weight:900;letter-spacing:.08em;color:#00BCF2;margin-bottom:18px;">←&nbsp;&nbsp;NO HANDOFF. ONE PARTNER ACROSS ALL BRANDS.&nbsp;&nbsp;→</div>`; }
 
-    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
-      ${V.wfLegend.map(l => `
-        <div style="display:flex;align-items:center;gap:8px;border:1px solid #E7EBEF;background:#fff;border-radius:999px;padding:6px 13px 6px 11px;">
-          <span style="${css(l.dotStyle)}"></span>
-          <span style="${css(l.nameStyle)}">${esc(l.name)}</span>
-          <span style="font-size:11.5px;color:#9AA4B0;">${esc(l.desc)}</span>
+function viewDelivery(V){
+  const A = App;
+  const phaseFlow = A.WF_GRID.map((p,i) => `
+    ${i?'<div style="flex:0 0 18px;height:2px;background:#D6DCE3;align-self:center;"></div>':''}
+    <div data-click="${reg(V.goWorkflow)}" style="flex:1 1 130px;min-width:120px;background:#fff;border:1px solid #E7EBEF;border-top:3px solid ${p.numTone==='good'?'#0FA697':'#00A7DB'};border-radius:12px;padding:12px 13px;cursor:pointer;">
+      <div style="font-size:11px;font-weight:900;color:#9AA4B0;letter-spacing:.04em;">${esc(p.num)}</div>
+      <div style="font-size:13px;font-weight:800;letter-spacing:-.015em;margin-top:3px;">${esc(p.name)}</div>
+      <div style="font-size:11px;color:#9AA4B0;margin-top:2px;">${esc(p.sub)}</div>
+    </div>`).join('');
+  return `
+  <div style="max-width:1320px;margin:0 auto;">
+    <div style="margin-bottom:18px;">
+      <div style="font-size:13px;font-weight:700;color:#00A7DB;letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px;">Rethink × GM Canada · End-to-end delivery model</div>
+      <h1 style="font-size:32px;font-weight:800;letter-spacing:-.03em;margin:0;">Tierless Workflow <span style="color:#9AA4B0;font-weight:700;">T1 → T2</span></h1>
+      <div style="font-size:14.5px;color:#67727F;margin-top:6px;max-width:760px;">Seamless from national brand to regional relevance across Chevrolet, GMC, Buick &amp; Cadillac. One partner — no handoff between national and regional.</div>
+    </div>
+    ${noHandoff()}
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px;">
+      ${A.DELIVERY_STATS.map(k => `
+        <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:18px 20px;position:relative;overflow:hidden;">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${TONE[k.tone]};"></div>
+          <div style="font-size:34px;font-weight:800;letter-spacing:-.035em;line-height:1;">${esc(k.v)}</div>
+          <div style="font-size:12.5px;color:#67727F;margin-top:8px;line-height:1.4;">${esc(k.l)}</div>
         </div>`).join('')}
     </div>
 
-    <div data-click="${reg(V.intakeOnClick)}" style="background:#0B0D10;border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:15px;cursor:pointer;">
-      <span style="font-size:10px;font-weight:900;letter-spacing:.1em;color:#04222B;background:#00BCF2;padding:5px 9px;border-radius:6px;flex-shrink:0;">START</span>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:17px;font-weight:800;letter-spacing:-.02em;color:#fff;">Brief from GM MAS</div>
-        <div style="font-size:12.5px;color:#9AA4B0;margin-top:2px;">Marketing Activation System · campaign intake</div>
+    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start;">
+      <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:20px 22px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <h3 style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0;">The 8-phase loop</h3>
+          <button data-click="${reg(V.goWorkflow)}" style="border:none;background:none;color:#00A7DB;font-weight:700;font-size:12.5px;cursor:pointer;">Open full workflow →</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:0;">${phaseFlow}</div>
+        <div style="margin-top:16px;background:#FBF7EE;border:1px solid #F0E6D2;border-left:3px solid #E0902A;border-radius:12px;padding:13px 15px;">
+          <div style="font-size:12.5px;font-weight:800;color:#0B0D10;">${esc(A.POD.title)} <span style="font-weight:700;color:#E0902A;">· ${esc(A.POD.fte)}</span></div>
+          <div style="font-size:11.5px;color:#7A6A4E;margin-top:3px;">${esc(A.POD.sub)} — rights, Ziflow, ~30 entity BCRs.</div>
+        </div>
       </div>
-      <span style="color:#00BCF2;font-weight:800;font-size:13px;white-space:nowrap;flex-shrink:0;">View roles ›</span>
+      <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:8px 22px 6px;">
+        ${A.DELIVERY_META.map(m => `
+          <div style="padding:12px 0;border-bottom:1px solid #F1F3F6;">
+            <div style="font-size:11px;font-weight:800;color:#9AA4B0;letter-spacing:.03em;text-transform:uppercase;">${esc(m.k)}</div>
+            <div style="font-size:13px;font-weight:700;color:#33404C;margin-top:3px;line-height:1.4;">${esc(m.v)}</div>
+          </div>`).join('')}
+        <div style="display:flex;gap:8px;padding:14px 0 12px;">
+          <button data-click="${reg(V.goStaffing)}" style="flex:1;border:1px solid #E2E6EB;background:#fff;color:#33404C;font-weight:700;font-size:12.5px;padding:9px 12px;border-radius:10px;cursor:pointer;">Staffing →</button>
+          <button data-click="${reg(V.goRoadmap)}" style="flex:1;border:none;background:#00BCF2;color:#04222B;font-weight:800;font-size:12.5px;padding:9px 12px;border-radius:10px;cursor:pointer;">Roadmap →</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function viewWorkflow(V){
+  const A = App;
+  const layerCols = (V.wfLayer==='all') ? ['account','craft','delivery','tech'] : [V.wfLayer];
+  const fnCell = (p,key) => { const col = WF_COL_COLOR[key]; const c = p[key]; if(!c) return '';
+    return `<div style="flex:1 1 220px;min-width:208px;background:#fff;border:1px solid #E7EBEF;border-top:3px solid ${col};border-radius:12px;padding:13px 14px;">
+      <div style="font-size:12.5px;font-weight:800;letter-spacing:-.01em;display:flex;flex-wrap:wrap;align-items:center;gap:5px;">${esc(c.who)}${(c.langs||[]).map(langTag).join('')}</div>
+      <ul style="margin:9px 0 0;padding-left:15px;">${c.tasks.map(t => `<li style="font-size:11.5px;color:#5A6470;line-height:1.5;margin-bottom:4px;">${esc(t)}</li>`).join('')}</ul>
+      ${c.tools?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">${c.tools.map(wfToolPill).join('')}</div>`:''}
+      ${c.fte?`<div style="margin-top:10px;font-size:10.5px;font-weight:800;color:${col};background:${col}14;display:inline-block;padding:3px 9px;border-radius:999px;">${esc(c.fte)}</div>`:''}
+    </div>`; };
+  const baCell = (p) => `<div style="flex:1 1 220px;min-width:208px;background:#FBF7EE;border:1px solid #F0E6D2;border-top:3px solid #E0902A;border-radius:12px;padding:13px 14px;">
+      ${p.ba.map((m,i) => `${i?'<div style="height:1px;background:#EADFCB;margin:11px 0;"></div>':''}
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:5px;"><span style="font-size:9px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;padding:2px 8px;border-radius:5px;background:${BA_TAG[m.k]}1A;color:${BA_TAG[m.k]};">${esc(m.tag)}</span>${m.title?`<span style="font-size:12.5px;font-weight:800;letter-spacing:-.01em;">${esc(m.title)}</span>`:''}</div>
+        <div style="font-size:11.5px;color:#7A6A4E;line-height:1.5;">${esc(m.desc)}</div>`).join('')}
+    </div>`;
+  return `
+  <div style="max-width:1480px;margin:0 auto;">
+    <div style="margin-bottom:14px;">
+      <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0 0 4px;">Tierless Workflow</h1>
+      <div style="font-size:13.5px;color:#67727F;">Eight phases, brief → measure — across Account, Craft, Production, Tech &amp; the Legal/Finance pod. One continuous team across all brands.</div>
+    </div>
+    ${noHandoff()}
+
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px;">
+      <span style="font-size:11px;font-weight:800;color:#9AA4B0;letter-spacing:.04em;text-transform:uppercase;margin-right:4px;">View layer</span>
+      ${A.WF_LAYERS.map(l => { const on = V.wfLayer===l.key; const col = l.key==='all'?'#00A7DB':WF_COL_COLOR[l.key];
+        return `<button data-click="${reg(() => A.setLayer(l.key))}" style="display:flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;border:1px solid ${on?col:'#E2E6EB'};background:${on?col:'#fff'};color:${on?'#fff':'#5A6470'};font-weight:700;font-size:12px;cursor:pointer;"><span style="font-size:11px;font-weight:900;">${esc(l.num)}</span>${esc(l.name)}</button>`; }).join('')}
     </div>
 
-    ${V.wfPhases.map(p => `
-      <div style="display:flex;justify-content:center;padding:5px 0;"><div style="width:2px;height:26px;background:#D6DCE3;"></div></div>
-      <div style="background:#F7F8FA;border:1px solid #EAEEF2;border-radius:18px;padding:18px;">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="width:34px;height:34px;border-radius:10px;background:#0B0D10;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;">${esc(p.num)}</span>
-          <div>
-            <div style="font-size:17px;font-weight:800;letter-spacing:-.02em;">${esc(p.label)}</div>
-            <div style="font-size:12px;color:#9AA4B0;">${esc(p.sub)}</div>
-          </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;">
+      ${A.WF_COLS.map(c => `<div style="display:flex;align-items:center;gap:7px;border:1px solid #E7EBEF;background:#fff;border-radius:999px;padding:5px 12px 5px 10px;"><span style="width:9px;height:9px;border-radius:3px;background:${c.color};"></span><span style="font-size:11.5px;font-weight:800;color:${c.color};letter-spacing:-.01em;">${esc(c.name)}</span><span style="font-size:11px;color:#9AA4B0;">${esc(c.sub)}</span></div>`).join('')}
+    </div>
+
+    <div style="background:#0B0D10;border-radius:16px;padding:16px 20px;display:flex;align-items:center;gap:15px;margin-bottom:6px;">
+      <span style="font-size:10px;font-weight:900;letter-spacing:.1em;color:#04222B;background:#00BCF2;padding:5px 9px;border-radius:6px;flex-shrink:0;">POD</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:15px;font-weight:800;letter-spacing:-.02em;color:#fff;">${esc(A.POD.title)} <span style="color:#E0902A;">· ${esc(A.POD.fte)}</span></div>
+        <div style="font-size:12px;color:#9AA4B0;margin-top:2px;">${esc(A.POD.sub)}</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+      ${A.POD.roles.map(r => `<div style="flex:1 1 220px;min-width:200px;background:#fff;border:1px solid #E7EBEF;border-left:3px solid #E0902A;border-radius:12px;padding:13px 14px;">
+        <div style="font-size:12.5px;font-weight:800;">${esc(r.title)} <span style="font-size:10px;font-weight:800;color:#E0902A;background:#E0902A14;padding:2px 7px;border-radius:999px;margin-left:4px;">${esc(r.fte)}</span></div>
+        <div style="font-size:11.5px;color:#7A8694;margin-top:5px;line-height:1.5;">${esc(r.desc)}</div>
+      </div>`).join('')}
+    </div>
+
+    ${A.WF_GRID.map(p => `
+      <div style="display:flex;justify-content:center;padding:6px 0;"><div style="width:2px;height:22px;background:#D6DCE3;"></div></div>
+      <div style="background:#F7F8FA;border:1px solid #EAEEF2;border-radius:18px;padding:16px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+          <span style="width:36px;height:36px;border-radius:10px;background:${p.numTone==='good'?'#0FA697':'#0B0D10'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;">${esc(p.num)}</span>
+          <div><div style="font-size:17px;font-weight:800;letter-spacing:-.02em;">${esc(p.name)}</div><div style="font-size:12px;color:#9AA4B0;">${esc(p.sub)}</div></div>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;">
-          ${p.lanes.map(ln => `
-            <div style="flex:1 1 260px;min-width:230px;background:#fff;border:1px solid #E7EBEF;border-radius:14px;padding:14px 15px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-                <span style="${css(ln.nameStyle)}">${esc(ln.name)}</span>
-                <span style="font-size:11px;color:#B0B8C1;">${esc(ln.desc)}</span>
-              </div>
-              <div style="${css(ln.barStyle)}"></div>
-              ${ln.boxes.map(b => `
-                <div data-click="${reg(b.onClick)}" style="${css(b.boxStyle)}">
-                  <div style="font-size:13.5px;font-weight:700;letter-spacing:-.01em;">${esc(b.title)}</div>
-                  <div style="font-size:11.5px;color:#9AA4B0;margin-top:3px;line-height:1.4;">${esc(b.note)}</div>
-                  <div style="${css(b.linkStyle)}">View roles ›</div>
-                </div>`).join('')}
-            </div>`).join('')}
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:stretch;">
+          ${layerCols.map(k => fnCell(p,k)).join('')}
+          ${baCell(p)}
         </div>
       </div>`).join('')}
 
-    <div style="display:flex;justify-content:center;padding:5px 0;"><div style="width:2px;height:26px;background:#D6DCE3;"></div></div>
-    <div style="background:#E2F5F2;border:1px solid #C9ECE6;border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:14px;">
-      <span style="width:30px;height:30px;border-radius:50%;background:#0FA697;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;flex-shrink:0;">✓</span>
+    <div style="display:flex;justify-content:center;padding:6px 0;"><div style="width:2px;height:22px;background:#D6DCE3;"></div></div>
+    <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;padding:18px 20px;display:flex;flex-wrap:wrap;gap:18px;align-items:center;">
+      ${A.WF_FOOTER.map(f => `<div style="flex:1 1 200px;min-width:180px;"><div style="font-size:12px;font-weight:800;letter-spacing:-.01em;">${esc(f.title)}</div><div style="font-size:11px;color:#9AA4B0;margin-top:4px;line-height:1.5;">${esc(f.body)}</div></div>`).join('')}
+      <div style="flex:0 0 auto;text-align:center;background:#E2F6FD;border-radius:14px;padding:14px 22px;"><div style="font-size:30px;font-weight:800;letter-spacing:-.03em;color:#00A7DB;line-height:1;">50.5</div><div style="font-size:11px;font-weight:700;color:#5A6470;margin-top:4px;">FTE Total (GM)</div></div>
+    </div>
+  </div>`;
+}
+
+function viewStaffing(V){
+  const A = App;
+  const typeMeta = {E:{l:'Employee',c:'#0FA697'},F:{l:'Freelance',c:'#E0902A'}};
+  const colTmpl = '2fr 1fr 0.9fr 0.6fr 0.8fr 0.9fr 0.6fr';
+  const headRow = `<div style="display:grid;grid-template-columns:${colTmpl};background:#F4F6F8;border-bottom:1px solid #E7EBEF;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#9AA4B0;">
+    ${['Role','Location','Type','Months','GM hrs','Internal','FTE'].map((h,i) => `<div style="padding:7px 11px;${i<6?'border-right:1px solid #E7EBEF;':''}${i===6?'color:#00A7DB;':''}">${h}</div>`).join('')}</div>`;
+  const dept = (d) => { const rows = A.STAFF[d.key]||[];
+    return `<div style="margin-bottom:14px;">
+      <div style="background:#fff;border:1px solid #E7EBEF;border-bottom:none;border-radius:12px 12px 0 0;padding:11px 16px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#5A6470;">${esc(d.label)} — ${esc(d.count)}</span>
+        ${d.note?`<span style="font-size:10px;font-weight:700;color:#00A7DB;background:#E2F6FD;padding:2px 8px;border-radius:999px;">${esc(d.note)}</span>`:''}
+      </div>
+      <div style="border:1px solid #E7EBEF;border-top:none;border-radius:0 0 12px 12px;overflow:hidden;">
+        ${headRow}
+        ${rows.map((r,i) => { const tm = typeMeta[r.type]||typeMeta.E;
+          return `<div style="display:grid;grid-template-columns:${colTmpl};border-bottom:${i<rows.length-1?'1px solid #F1F3F6':'none'};background:${i%2?'#FAFBFC':'#fff'};">
+            <div style="padding:8px 11px;font-size:11.5px;font-weight:600;border-right:1px solid #F1F3F6;">${esc(r.title)}</div>
+            <div style="padding:8px 11px;font-size:11.5px;color:#67727F;border-right:1px solid #F1F3F6;">${esc(r.loc)}</div>
+            <div style="padding:8px 11px;border-right:1px solid #F1F3F6;"><span style="font-size:9.5px;font-weight:800;color:${tm.c};background:${tm.c}14;padding:2px 8px;border-radius:999px;">${esc(tm.l)}</span></div>
+            <div style="padding:8px 11px;font-size:11.5px;color:#9AA4B0;text-align:center;border-right:1px solid #F1F3F6;">${esc(r.months)}</div>
+            <div style="padding:8px 11px;font-size:11.5px;color:#67727F;text-align:center;border-right:1px solid #F1F3F6;">${r.gmHrs.toLocaleString()}</div>
+            <div style="padding:8px 11px;font-size:11.5px;color:#9AA4B0;text-align:center;border-right:1px solid #F1F3F6;">${r.intHrs.toLocaleString()}</div>
+            <div style="padding:8px 11px;font-size:11.5px;font-weight:800;color:#00A7DB;text-align:center;">${r.fte.toFixed(2)}</div>
+          </div>`; }).join('')}
+      </div>
+    </div>`; };
+  return `
+  <div style="max-width:1320px;margin:0 auto;">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:18px;flex-wrap:wrap;">
       <div>
-        <div style="font-size:15px;font-weight:800;letter-spacing:-.01em;color:#0B5249;">Live across Tier 1, Tier 2 & Social</div>
-        <div style="font-size:12.5px;color:#3C7A70;margin-top:1px;">Trafficked, optimized & reported back to GM</div>
+        <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0;">Staffing Plan <span style="color:#9AA4B0;font-weight:700;">65 Roles</span></h1>
+        <div style="font-size:13.5px;color:#67727F;margin-top:3px;">All roles, departments, locations, hours &amp; FTE across all 6 GM stakeholder brands.</div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:18px;">
+        ${A.STAFF_META.map(m => `<div><div style="font-size:11px;font-weight:700;color:#9AA4B0;">${esc(m.k)}</div><div style="font-size:13.5px;font-weight:800;letter-spacing:-.01em;">${esc(m.v)}</div></div>`).join('')}
       </div>
     </div>
+
+    <div style="font-size:11px;font-weight:800;color:#9AA4B0;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;">FTE by GM stakeholder brand</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:22px;">
+      ${A.STAFF_BRANDS.map(b => `<div style="background:${b.hi?'#E2F6FD':'#fff'};border:1px solid ${b.hi?'#BEE9F7':'#E7EBEF'};border-radius:14px;padding:16px;text-align:center;">
+        <div style="font-size:28px;font-weight:800;letter-spacing:-.035em;color:${b.hi?'#00A7DB':'#33404C'};line-height:1;">${esc(b.fte)}</div>
+        <div style="font-size:12px;font-weight:700;margin-top:6px;">${esc(b.name)}</div>
+        <div style="font-size:10.5px;color:#9AA4B0;margin-top:3px;line-height:1.4;">${esc(b.note)}</div>
+      </div>`).join('')}
+    </div>
+
+    <div style="font-size:11px;font-weight:800;color:#9AA4B0;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;">Full direct staff — all 65 roles</div>
+    ${A.STAFF_DEPTS.map(dept).join('')}
+
+    <div style="background:#E2F6FD;border:1px solid #BEE9F7;border-radius:16px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:20px 22px;margin-top:6px;">
+      ${A.STAFF_TOTALS.map(t => `<div style="text-align:center;"><div style="font-size:30px;font-weight:800;letter-spacing:-.03em;color:#00A7DB;line-height:1;">${esc(t.v)}</div><div style="font-size:11px;color:#5A6470;margin-top:5px;">${esc(t.l)}</div></div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function viewRoadmap(V){
+  const A = App;
+  const rm = A.ROADMAPS[V.roadmapKey];
+  const tabs = [{k:'90',l:'90-Day'},{k:'6',l:'6-Month'},{k:'12',l:'12-Month'}];
+  const colTmpl = '210px repeat(3,1fr)';
+  const cellBorder = (last) => `border-bottom:1px solid #E7EBEF;${last?'':'border-right:1px solid #E7EBEF;'}`;
+  const phaseHead = `
+    <div style="background:#F4F6F8;border-bottom:1px solid #E7EBEF;border-right:1px solid #E7EBEF;padding:12px 14px;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9AA4B0;display:flex;align-items:flex-end;">Track</div>
+    ${rm.phases.map((ph,i) => { const c = RM_TONE[ph.tone];
+      return `<div style="${cellBorder(i===2)}background:${c}0F;padding:12px 14px;">
+        <div style="font-size:11px;font-weight:900;color:${c};letter-spacing:.04em;">${esc(ph.num)}</div>
+        <div style="font-size:14px;font-weight:800;letter-spacing:-.015em;color:${c};margin-top:2px;">${esc(ph.name)}</div>
+        <div style="font-size:11px;color:#9AA4B0;margin-top:1px;">${esc(ph.range)}</div>
+      </div>`; }).join('')}`;
+  const msCard = (m) => { const c = RM_TONE[m.tone];
+    return `<div style="background:#fff;border:1px solid #EEF1F4;border-left:3px solid ${c};border-radius:10px;padding:11px 12px;margin-bottom:9px;">
+      <div style="font-size:12.5px;font-weight:800;letter-spacing:-.01em;">${esc(m.title)}</div>
+      <div style="font-size:11px;color:#7A8694;line-height:1.5;margin-top:4px;">${esc(m.body)}</div>
+      ${m.tag?`<div style="margin-top:7px;"><span style="font-size:9.5px;font-weight:800;color:${c};background:${c}14;padding:2px 8px;border-radius:999px;letter-spacing:.02em;">${esc(m.tag)}</span></div>`:''}
+    </div>`; };
+  const trackBlock = (sec) => {
+    let out = '';
+    if(sec.label){ out += `<div style="grid-column:1 / -1;background:#0B0D10;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-bottom:1px solid #E7EBEF;">
+      <span style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;">${esc(sec.label)}</span>
+      ${sec.req?`<span style="font-size:10.5px;font-weight:700;color:#FFB3C0;background:#E2455C26;padding:2px 9px;border-radius:999px;">${esc(sec.req)}</span>`:''}</div>`; }
+    sec.tracks.forEach(tr => {
+      out += `<div style="${cellBorder(false)}padding:13px 14px;background:#FAFBFC;"><div style="font-size:13px;font-weight:800;letter-spacing:-.01em;">${esc(tr.name)}</div><div style="font-size:10.5px;color:#9AA4B0;margin-top:3px;line-height:1.4;">${esc(tr.owner)}</div></div>`;
+      tr.cells.forEach((cell,ci) => {
+        out += `<div style="${cellBorder(ci===2)}padding:13px 13px 5px;">${(cell.ms||[]).map(msCard).join('')}${cell.gate?`<div style="background:#0B0D10;color:#fff;font-size:11px;font-weight:700;padding:8px 11px;border-radius:9px;margin-bottom:9px;">${esc(cell.gate)}</div>`:''}</div>`;
+      });
+    });
+    return out;
+  };
+  return `
+  <div style="max-width:1480px;margin:0 auto;">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:16px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#00A7DB;letter-spacing:.03em;text-transform:uppercase;margin-bottom:5px;">${esc(rm.eyebrow)}</div>
+        <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0;">${esc(rm.title)} <span style="color:#9AA4B0;font-weight:700;">${esc(rm.accent)}</span></h1>
+        <div style="font-size:13.5px;color:#67727F;margin-top:4px;max-width:720px;">${esc(rm.sub)}</div>
+      </div>
+      <div style="display:flex;background:#F0F2F5;border-radius:10px;padding:3px;gap:2px;">
+        ${tabs.map(t => { const on = V.roadmapKey===t.k;
+          return `<button data-click="${reg(() => A.setRoadmap(t.k))}" style="padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:12.5px;${on?'background:#0B0D10;color:#fff;':'background:transparent;color:#67727F;'}">${esc(t.l)}</button>`; }).join('')}
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:18px;margin-bottom:16px;">
+      ${rm.meta.map(m => `<div><div style="font-size:11px;font-weight:700;color:#9AA4B0;">${esc(m.k)}</div><div style="font-size:13px;font-weight:800;letter-spacing:-.01em;margin-top:1px;">${esc(m.v)}</div></div>`).join('')}
+    </div>
+
+    <div style="background:#fff;border:1px solid #E7EBEF;border-radius:16px;overflow:hidden;">
+      <div style="overflow-x:auto;">
+        <div style="display:grid;grid-template-columns:${colTmpl};min-width:940px;">
+          ${phaseHead}
+          ${rm.sections.map(trackBlock).join('')}
+        </div>
+      </div>
+    </div>
+
+    ${rm.summary?`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:16px;">
+      ${rm.summary.map(s => `<div style="background:#fff;border:1px solid #E7EBEF;border-radius:14px;padding:16px 18px;"><div style="font-size:28px;font-weight:800;letter-spacing:-.035em;color:#00A7DB;line-height:1;">${esc(s.num)}</div><div style="font-size:11.5px;color:#67727F;margin-top:6px;line-height:1.4;">${esc(s.label)}</div></div>`).join('')}
+    </div>`:''}
+    ${rm.crit?`<div style="background:#FCE7EB;border:1px solid #F6CdD5;border-radius:14px;padding:14px 18px;margin-top:14px;font-size:12.5px;color:#9E2438;line-height:1.5;">${esc(rm.crit)}</div>`:''}
+    ${rm.year1?`<div style="font-size:11px;font-weight:800;color:#9AA4B0;letter-spacing:.06em;text-transform:uppercase;margin:22px 0 10px;">Year 1 — what we will have built</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
+      ${rm.year1.map(y => `<div style="background:${y.hi?'#E2F6FD':'#fff'};border:1px solid ${y.hi?'#BEE9F7':'#E7EBEF'};border-radius:14px;padding:16px 18px;"><div style="font-size:24px;font-weight:800;letter-spacing:-.035em;color:${y.hi?'#00A7DB':'#33404C'};line-height:1;">${esc(y.v)}</div><div style="font-size:12px;font-weight:700;margin-top:5px;">${esc(y.l)}</div><div style="font-size:10.5px;color:#9AA4B0;margin-top:3px;line-height:1.4;">${esc(y.note)}</div></div>`).join('')}
+    </div>`:''}
   </div>`;
 }
 
@@ -836,37 +1273,6 @@ function viewCreative(V){
   </div>`;
 }
 
-function viewWfPanel(V){
-  if(!V.wfOpen || !V.wfPanel) return '';
-  const p = V.wfPanel;
-  return `
-  <div data-click="${reg(V.closeStep)}" style="position:fixed;inset:0;background:rgba(11,13,16,.45);backdrop-filter:blur(3px);z-index:50;display:flex;justify-content:flex-end;">
-    <div data-click="${reg(V.wfStop)}" style="width:min(440px,100%);height:100%;background:#fff;box-shadow:-20px 0 60px rgba(11,13,16,.25);display:flex;flex-direction:column;">
-      <div style="padding:22px 24px;border-bottom:1px solid #EEF1F4;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
-          <span style="${css(p.tagStyle)}">${esc(p.laneName)}</span>
-          <button data-click="${reg(V.closeStep)}" style="border:none;background:#F0F2F5;width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:15px;color:#67727F;">✕</button>
-        </div>
-        <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0;">${esc(p.title)}</h2>
-        <div style="font-size:12.5px;color:#9AA4B0;margin-top:3px;">${esc(p.phase)} · ${esc(p.laneName)} lane</div>
-      </div>
-      <div style="padding:16px 24px 24px;overflow-y:auto;flex:1;">
-        <div style="font-size:11px;font-weight:800;color:#9AA4B0;letter-spacing:.06em;margin-bottom:4px;">ROLES INVOLVED</div>
-        ${p.roles.map(r => `
-          <div style="display:flex;gap:13px;padding:14px 0;border-bottom:1px solid #F1F3F6;">
-            <div style="${css(r.avatarStyle)}">${esc(r.initials)}</div>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:14px;font-weight:800;letter-spacing:-.01em;">${esc(r.name)}</div>
-              <div style="font-size:12.5px;color:#7A8694;line-height:1.45;margin-top:2px;">${esc(r.resp)}</div>
-              <div style="margin-top:8px;"><span style="font-size:10.5px;font-weight:700;color:#5A6470;background:#F2F4F7;padding:3px 9px;border-radius:6px;">${esc(r.tool)}</span></div>
-            </div>
-          </div>`).join('')}
-        <div style="margin-top:18px;background:#FAFBFC;border:1px dashed #D6DCE3;border-radius:12px;padding:14px 15px;font-size:12px;color:#9AA4B0;line-height:1.5;">Placeholder — detailed RACI, hand-offs, SLAs & deliverables for this step will live here.</div>
-      </div>
-    </div>
-  </div>`;
-}
-
 function viewPdf(V){
   if(!V.pdfOpen) return '';
   let body = '';
@@ -954,21 +1360,29 @@ function viewPdf(V){
 /* ---------- shell + render ---------- */
 function buildHTML(V){
   let content = '';
-  if(V.isOverview) content = viewOverview(V);
-  else if(V.isCalendar) content = viewCalendar(V);
+  if(V.isDelivery) content = viewDelivery(V);
   else if(V.isWorkflow) content = viewWorkflow(V);
+  else if(V.isStaffing) content = viewStaffing(V);
+  else if(V.isRoadmap) content = viewRoadmap(V);
+  else if(V.isOverview) content = viewOverview(V);
+  else if(V.isCalendar) content = viewCalendar(V);
   else if(V.isCampaign) content = viewCampaign(V);
   else if(V.isCreative) content = viewCreative(V);
 
+  const isTool = V.isOverview || V.isCalendar || V.isCampaign || V.isCreative;
   return `
   <div style="display:flex;height:100vh;width:100%;overflow:hidden;background:#F4F6F8;">
     <div style="width:76px;flex:0 0 76px;background:#0B0D10;display:flex;flex-direction:column;align-items:center;padding:18px 0 16px;gap:6px;z-index:20;">
       <div style="width:44px;height:44px;border-radius:13px;background:#fff;display:flex;align-items:center;justify-content:center;margin-bottom:10px;overflow:hidden;">
         <img src="assets/gm-logo.png" alt="GM" style="width:30px;height:30px;display:block;filter:brightness(0);" />
       </div>
-      <button data-click="${reg(V.goOverview)}" title="Home" style="${css(V.navHomeStyle)}">${ICON_HOME}</button>
+      <button data-click="${reg(V.goDelivery)}" title="Delivery Model" style="${css(V.navDeliveryStyle)}">${ICON_DELIVERY}</button>
+      <button data-click="${reg(V.goWorkflow)}" title="Tierless Workflow" style="${css(V.navWfStyle)}">${ICON_WF}</button>
+      <button data-click="${reg(V.goStaffing)}" title="Staffing Plan" style="${css(V.navStaffStyle)}">${ICON_STAFF}</button>
+      <button data-click="${reg(V.goRoadmap)}" title="Roadmap" style="${css(V.navRoadmapStyle)}">${ICON_ROADMAP}</button>
+      <div style="width:28px;height:1px;background:#2A2E35;margin:6px 0;"></div>
+      <button data-click="${reg(V.goOverview)}" title="Live Example" style="${css(V.navHomeStyle)}">${ICON_HOME}</button>
       <button data-click="${reg(V.goCalendar)}" title="Calendar" style="${css(V.navCalStyle)}">${ICON_CAL}</button>
-      <button data-click="${reg(V.goWorkflow)}" title="Workflow" style="${css(V.navWfStyle)}">${ICON_WF}</button>
       <div style="flex:1;"></div>
       <div style="${css(V.roleAvatar.style)}">${esc(V.roleAvatar.text)}</div>
     </div>
@@ -981,6 +1395,7 @@ function buildHTML(V){
             <button data-click="${reg(c.onClick)}" style="${css(c.style)}">${esc(c.label)}</button>`).join('')}
         </div>
         <div style="margin-left:auto;display:flex;align-items:center;gap:16px;">
+          ${isTool ? `
           <div style="display:flex;align-items:center;gap:8px;padding:6px 12px 6px 10px;border:1px solid #E7EBEF;border-radius:999px;flex-shrink:0;white-space:nowrap;">
             <span style="width:8px;height:8px;border-radius:50%;background:#0FA697;animation:pulse 1.6s infinite;flex-shrink:0;"></span>
             <span style="font-size:12px;font-weight:600;color:#67727F;">5 sources live</span>
@@ -991,7 +1406,9 @@ function buildHTML(V){
           <button data-click="${reg(V.openPdf)}" style="display:flex;align-items:center;gap:7px;background:#00BCF2;border:none;color:#04222B;font-weight:800;font-size:12.5px;padding:9px 15px;border-radius:10px;cursor:pointer;letter-spacing:.005em;">
             ${ICON_PLUS}
             Import brief
-          </button>
+          </button>` : `
+          <span style="font-size:11px;font-weight:700;color:#9AA4B0;letter-spacing:.04em;border:1px solid #E7EBEF;border-radius:999px;padding:6px 13px;white-space:nowrap;">GM Canada · T1 + T2</span>
+          <span style="font-size:11px;font-weight:700;color:#E0902A;background:#FBF0DC;border-radius:999px;padding:6px 13px;white-space:nowrap;">Confidential</span>`}
         </div>
       </header>
 
@@ -1000,7 +1417,6 @@ function buildHTML(V){
       </main>
     </div>
 
-    ${viewWfPanel(V)}
     ${viewPdf(V)}
   </div>`;
 }

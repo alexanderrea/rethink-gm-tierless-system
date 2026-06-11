@@ -2,15 +2,18 @@
 
 **Live:** https://rethink-gm-tierless-system.vercel.app
 
-A clickable DCO/CMP command center for the GM × Rethink advertising pitch — a single integrated marketing calendar fed by Smartsheet, Figma, Clinch, Celtra and imported PDF briefs, with high-level and drilled-down views across roles.
+A clickable command center for the GM Canada × Rethink **tierless T1+T2 agency model** — pairing the pitch narrative (delivery model, workflow, staffing, roadmaps) with a live, interactive marketing-ops demo. Built in a single light "enterprise SaaS" layout (Archivo, cyan/black).
 
-## Features
+## Sections (left rail)
 
-- **Overview** — role switcher (Executive / Account / Producer) reshapes the dashboard; portfolio health, live connected-sources rail, and an alerts feed.
-- **Integrated marketing calendar** — every GM campaign × week as a gantt, status-colored flight bars, division/source dots, a live "Today" line, and division filters.
-- **Drill-down (4 levels)** — Portfolio → Campaign (flights, Smartsheet tasks, activity) → Flight → the Clinch DCO fan-out (1 Figma concept → 12 variants → 90 Celtra sizes).
-- **Workflow** — Human / Craft / Delivery swimlanes from the GM MAS brief through Tier 1 / Tier 2 / Tier Social, with a tap-to-open role panel.
-- **PDF brief import** — parses a media plan and drops a new campaign onto the calendar.
+- **Delivery Model** — the Tierless Workflow T1→T2 landing: hero, key stats, the 8-phase loop, and the Legal/Finance pod.
+- **Tierless Workflow** — the full 8-phase × 5-function grid (Account · Craft · Production · Tech+AI · Legal/Finance) with **Human / Craft / Delivery / Tech layer toggles**, tool pills, BA moments, and the FTE footer (50.5 FTE).
+- **Staffing Plan** — all 65 roles across 8 departments with location/type/hours/FTE, FTE-by-brand, and totals (97,020 GM hrs · 132,000 all-in).
+- **Roadmap** — 90-Day / 6-Month / 12-Month transition plans as phase × track milestone grids with gates, critical path, and the Year-1 scorecard.
+- **Live Example** — the interactive DCO/CMP dashboard: role switcher (Exec / Account / Producer), portfolio health, live connected-sources rail, and an alerts feed.
+- **Calendar** — every GM campaign × week as a gantt with drill-down: Campaign (flights, Smartsheet tasks, activity) → Flight → the Clinch DCO fan-out (1 Figma concept → 12 variants → 90 Celtra sizes). Includes the PDF-brief import flow.
+
+Pitch data is ported faithfully from the GM Canada T1+T2 deck. Marked **Confidential**.
 
 ## Running locally
 
@@ -22,4 +25,4 @@ npx serve .
 
 ## Tech
 
-Plain HTML/CSS/JS, Archivo type. A small vanilla render loop drives state; all UI is reproduced from the original design prototype.
+Plain HTML/CSS/JS, Archivo type, no build step or runtime dependencies. A small vanilla render loop drives state via event delegation.
