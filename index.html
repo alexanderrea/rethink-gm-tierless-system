@@ -36,7 +36,7 @@ function css(o){ if(!o) return ''; return Object.keys(o).map(k => k.replace(/[A-
 function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 const App = {
-  state: { screen:'delivery', role:'exec', campaignId:null, flightId:null, pdfOpen:false, pdfStep:0, pdfReveal:0, tick:0, filter:'all', addedId:null, added:false, wfLayer:'all', roadmap:'90' },
+  state: { screen:'delivery', role:'exec', campaignId:null, flightId:null, pdfOpen:false, pdfStep:0, pdfReveal:0, tick:0, filter:'all', addedId:null, added:false, wfLayer:'all', wfView:'schematic', roadmap:'90' },
 
   setState(patch){
     const p = (typeof patch === 'function') ? patch(this.state) : patch;
@@ -102,6 +102,19 @@ const App = {
     {id:'trax-conv',name:'Conversion',start:'2026-09-01',end:'2026-10-10',status:'planned',channels:['Display','Search','Social'],creatives:54},
   ]},
   // ===== Tierless model data (ported from the GM Canada T1+T2 pitch) =====
+  IMC_META: [
+    {k:'Tool',v:'Airtable + Opal sync via Zapier'},
+    {k:'Owner',v:'Dir. Studio Tech + Integration'},
+    {k:'Operators',v:'Regional account leads daily'},
+    {k:'Escalation',v:'Agency EP · Studio EP'},
+  ],
+  IMC_CARDS: [
+    {tone:'cyan',title:'Why Airtable',body:"Configured to GM Canada's exact offer matrix structure. Five bespoke views. Zapier sync to Opal. Frame.io integration closes the loop on delivery. Not a generic tool — a purpose-built IMC."},
+    {tone:'amber',title:'Opal integration',body:"Brief data flows in from Opal. Finished assets return to Opal via Frame.io. GM's planning environment stays current with no manual re-entry at any stage of the workflow."},
+    {tone:'good',title:'SOW requirement',body:'T2 agency must maintain a centralized IMC keeping GM Canada, T1 AOR, Media AOR, regional teams, and dealers aligned on messaging, offers, and key moments. Schedule A2, Section 1.1.'},
+  ],
+  IMC_VIEWS: ['Brand blocking','Offer matrix','Channel status','Go-live countdown','Dealer comms'],
+  IMC_TOOLS: [{l:'Airtable'},{l:'Opal sync'},{l:'Frame.io'},{l:'Smartsheet',k:'gm'},{l:'Asset Central/IQ',k:'gm'},{l:'Looker Studio',k:'google'},{l:'GA4',k:'google'}],
   DELIVERY_META: [
     {k:'T1 monthly assets',v:'Continuous across 4 brands'},
     {k:'T2 monthly assets (EN+FR)',v:'~3,260+ EN+FR (RMAB + CSMAB)'},
@@ -398,6 +411,7 @@ const App = {
   goStaffing(){ this.setState({screen:'staffing',campaignId:null,flightId:null}); },
   goRoadmap(){ this.setState({screen:'roadmap',campaignId:null,flightId:null}); },
   setLayer(l){ this.setState({wfLayer:l}); },
+  setWfView(v){ this.setState({wfView:v}); },
   setRoadmap(r){ this.setState({roadmap:r}); },
 
   buildCampaignDetail(c){
@@ -629,6 +643,7 @@ const App = {
     const isStaffing = S.screen==='staffing';
     const isRoadmap = S.screen==='roadmap';
     const wfLayer = S.wfLayer;
+    const wfView = S.wfView;
     const roadmapKey = S.roadmap;
 
     const cc = this.findCampaign(S.campaignId); const fr = this.findFlight(S.flightId);
@@ -668,10 +683,10 @@ const App = {
       pdfStep0:S.pdfStep===0,pdfStep1:S.pdfStep===1,pdfStep2:S.pdfStep===2,
       pdfFields,pdfProgressStyle,pdfScanStyle,pdfNewFlights,
       parseBrief:() => this.parseBrief(),addToCalendar:() => this.addToCalendar(),
-      isDelivery,isWorkflow,isStaffing,isRoadmap,wfLayer,roadmapKey,
+      isDelivery,isWorkflow,isStaffing,isRoadmap,wfLayer,wfView,roadmapKey,
       navDeliveryStyle,navWfStyle,navStaffStyle,navRoadmapStyle,
       goDelivery:() => this.goDelivery(),goWorkflow:() => this.goWorkflow(),goStaffing:() => this.goStaffing(),goRoadmap:() => this.goRoadmap(),
-      setLayer:(l) => this.setLayer(l),setRoadmap:(r) => this.setRoadmap(r),
+      setLayer:(l) => this.setLayer(l),setWfView:(v) => this.setWfView(v),setRoadmap:(r) => this.setRoadmap(r),
     };
   }
 };
@@ -793,17 +808,36 @@ function viewOverview(V){
 }
 
 function viewCalendar(V){
+  const A = App;
+  const toneC = {cyan:'#00A7DB',amber:'#E0902A',good:'#0FA697'};
   return `
   <div style="max-width:1480px;margin:0 auto;">
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:18px;">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:16px;">
       <div>
+        <div style="font-size:12.5px;font-weight:700;color:#00A7DB;letter-spacing:.03em;text-transform:uppercase;margin-bottom:5px;">Integrated Messaging Calendar · single source of truth</div>
         <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0;">Integrated marketing calendar</h1>
-        <div style="font-size:13.5px;color:#67727F;margin-top:3px;">Every campaign, flight & source in one timeline · Jun – Oct 2026</div>
+        <div style="font-size:13.5px;color:#67727F;margin-top:3px;">One living system aligning GM Canada, T1 AOR, Media AOR, 15+ RMABs, CSMABs &amp; dealers · Jun – Oct 2026</div>
       </div>
-      <div style="display:flex;align-items:center;gap:16px;">
-        <div style="display:flex;flex-wrap:wrap;gap:14px;">
-          ${V.legend.map(l => `<div style="display:flex;align-items:center;gap:6px;"><span style="${css(l.style)}"></span><span style="font-size:11.5px;color:#67727F;font-weight:600;">${esc(l.label)}</span></div>`).join('')}
-        </div>
+      <div style="display:flex;flex-wrap:wrap;gap:14px 18px;">
+        ${A.IMC_META.map(m => `<div><div style="font-size:10.5px;font-weight:700;color:#9AA4B0;">${esc(m.k)}</div><div style="font-size:12px;font-weight:700;color:#33404C;margin-top:1px;">${esc(m.v)}</div></div>`).join('')}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;">
+      ${A.IMC_CARDS.map(c => { const col = toneC[c.tone];
+        return `<div style="background:#fff;border:1px solid #E7EBEF;border-left:3px solid ${col};border-radius:14px;padding:14px 16px;">
+          <div style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${col};margin-bottom:6px;">${esc(c.title)}</div>
+          <div style="font-size:11.5px;color:#5A6470;line-height:1.6;">${esc(c.body)}</div>
+        </div>`; }).join('')}
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px;flex-wrap:wrap;">
+      <div style="display:flex;flex-wrap:wrap;gap:14px;">
+        ${V.legend.map(l => `<div style="display:flex;align-items:center;gap:6px;"><span style="${css(l.style)}"></span><span style="font-size:11.5px;color:#67727F;font-weight:600;">${esc(l.label)}</span></div>`).join('')}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px;">
+        <span style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#9AA4B0;">Powered by</span>
+        ${A.IMC_TOOLS.map(wfToolPill).join('')}
       </div>
     </div>
 
@@ -936,12 +970,23 @@ function viewWorkflow(V){
         <div style="display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:5px;"><span style="font-size:9px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;padding:2px 8px;border-radius:5px;background:${BA_TAG[m.k]}1A;color:${BA_TAG[m.k]};">${esc(m.tag)}</span>${m.title?`<span style="font-size:12.5px;font-weight:800;letter-spacing:-.01em;">${esc(m.title)}</span>`:''}</div>
         <div style="font-size:11.5px;color:#7A6A4E;line-height:1.5;">${esc(m.desc)}</div>`).join('')}
     </div>`;
+  const tabs = [{k:'schematic',l:'Schematic'},{k:'grid',l:'Detail grid'}];
+  const subDesc = V.wfView==='schematic'
+    ? 'One team. Two tracks. One delivery — T1 national and T2 regional run in parallel, merging at DAM handoff, QA &amp; final delivery.'
+    : 'Eight phases, brief → measure — across Account, Craft, Production, Tech &amp; the Legal/Finance pod. One continuous team across all brands.';
   return `
   <div style="max-width:1480px;margin:0 auto;">
-    <div style="margin-bottom:14px;">
-      <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0 0 4px;">Tierless Workflow</h1>
-      <div style="font-size:13.5px;color:#67727F;">Eight phases, brief → measure — across Account, Craft, Production, Tech &amp; the Legal/Finance pod. One continuous team across all brands.</div>
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:14px;flex-wrap:wrap;">
+      <div>
+        <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0 0 4px;">Tierless Workflow</h1>
+        <div style="font-size:13.5px;color:#67727F;max-width:760px;">${subDesc}</div>
+      </div>
+      <div style="display:flex;background:#F0F2F5;border-radius:10px;padding:3px;gap:2px;">
+        ${tabs.map(t => { const on = V.wfView===t.k;
+          return `<button data-click="${reg(() => A.setWfView(t.k))}" style="padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:12.5px;${on?'background:#0B0D10;color:#fff;':'background:transparent;color:#67727F;'}">${esc(t.l)}</button>`; }).join('')}
+      </div>
     </div>
+    ${V.wfView==='schematic' ? viewSchematic(V) : `
     ${noHandoff()}
 
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px;">
@@ -986,7 +1031,99 @@ function viewWorkflow(V){
       ${A.WF_FOOTER.map(f => `<div style="flex:1 1 200px;min-width:180px;"><div style="font-size:12px;font-weight:800;letter-spacing:-.01em;">${esc(f.title)}</div><div style="font-size:11px;color:#9AA4B0;margin-top:4px;line-height:1.5;">${esc(f.body)}</div></div>`).join('')}
       <div style="flex:0 0 auto;text-align:center;background:#E2F6FD;border-radius:14px;padding:14px 22px;"><div style="font-size:30px;font-weight:800;letter-spacing:-.03em;color:#00A7DB;line-height:1;">50.5</div><div style="font-size:11px;font-weight:700;color:#5A6470;margin-top:4px;">FTE Total (GM)</div></div>
     </div>
+    `}
   </div>`;
+}
+
+/* ---------- production schematic (deck page 2) ---------- */
+function viewSchematic(V){
+  const T1='#7A5AF0', T2='#00A7DB', GMC='#E0902A', SOC='#0FA697', GOOG='#4285F4';
+  const conn = (col) => `<div style="display:flex;justify-content:center;padding:5px 0;"><div style="width:2px;height:20px;background:${col}55;"></div></div>`;
+  const laneCard = (col,title,lines,who) => `<div style="flex:1 1 360px;min-width:280px;background:${col}0D;border:1px solid ${col}3A;border-radius:14px;padding:15px 16px;">
+      <div style="font-size:14px;font-weight:800;letter-spacing:-.015em;color:${col};">${title}</div>
+      ${lines.map(l => `<div style="font-size:12px;color:#5A6470;line-height:1.5;margin-top:4px;">${esc(l)}</div>`).join('')}
+      ${who?`<div style="font-size:11px;color:${col};opacity:.85;margin-top:8px;font-weight:600;">${esc(who)}</div>`:''}
+    </div>`;
+  const fullCard = (col,bg,eyebrow,title,sub,who) => `<div style="background:${bg};border:1px solid ${col}45;border-radius:14px;padding:16px 18px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div style="font-size:14px;font-weight:800;letter-spacing:-.01em;color:${col};">${title}</div>
+        ${eyebrow?`<span style="font-size:10px;font-weight:800;letter-spacing:.06em;color:${col};text-transform:uppercase;">${esc(eyebrow)}</span>`:''}
+      </div>
+      ${sub?`<div style="font-size:12px;color:#5A6470;line-height:1.5;margin-top:5px;">${esc(sub)}</div>`:''}
+      ${who?`<div style="font-size:11px;color:${col};opacity:.85;margin-top:6px;font-weight:600;">${esc(who)}</div>`:''}
+    </div>`;
+  const pill = (label,col) => `<span style="font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:7px;background:${col}14;border:1px solid ${col}33;color:${col};">${esc(label)}</span>`;
+  const split = `<div style="flex:1 1 360px;min-width:280px;background:${T2}0D;border:1px solid ${T2}3A;border-radius:14px;padding:15px 16px;">
+      <div style="font-size:14px;font-weight:800;letter-spacing:-.015em;color:${T2};">Creative split — 10 / 60 / 30</div>
+      <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;">
+        ${[['10%','Adapt · ~80% auto',SOC],['60%','Reference · ~50% auto',GMC],['30%','Net new · human-led','#E2455C']].map(s => `<div style="flex:1 1 90px;text-align:center;background:${s[2]}12;border:1px solid ${s[2]}38;border-radius:10px;padding:10px 8px;"><div style="font-size:22px;font-weight:800;letter-spacing:-.03em;color:${s[2]};line-height:1;">${s[0]}</div><div style="font-size:10px;color:${s[2]};font-weight:600;margin-top:4px;">${s[1]}</div></div>`).join('')}
+      </div>
+    </div>`;
+  const socPills = ['Meta/Instagram','TikTok','YouTube','X'].map(p => pill(p,SOC)).join('') + `<span style="font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:7px;background:${SOC}22;border:1px solid ${SOC}55;color:${SOC};">Chevy FR Instagram ✦</span>`;
+  const t1Tools = ['Adobe Premiere','After Effects','Adobe Firefly','Frame.io','ElevenLabs','KREA AI','Bynder'];
+  const t2Tools = ['Celtra / TMS','Storyteq','Phrase TMS','Operative One','Adstream','Bynder SDK','Smartsheet'];
+  const shTools = [['Ziflow',GMC],['Asset Central/IQ',GMC],['Smartsheet',GMC],['Opal',GMC],['GA4',GOOG],['Looker Studio',GOOG],['SA360',GOOG],['Google Ads API',GOOG],['YouTube Studio',GOOG],['DV360',GOOG],['Claude API',GOOG]];
+  return `
+    <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px;">
+      <div style="flex:1 1 160px;background:#fff;border:1px solid #E7EBEF;border-radius:12px;padding:12px 14px;"><div style="font-size:11px;color:#9AA4B0;font-weight:700;">Chevy</div><div style="font-size:13px;font-weight:800;margin-top:2px;">~1,305 assets/mo EN+FR</div></div>
+      <div style="flex:1 1 160px;background:#fff;border:1px solid #E7EBEF;border-radius:12px;padding:12px 14px;"><div style="font-size:11px;color:#9AA4B0;font-weight:700;">Buick / GMC</div><div style="font-size:13px;font-weight:800;margin-top:2px;">~900 assets/mo EN+FR</div></div>
+      <div style="flex:1 1 160px;background:#fff;border:1px solid #E7EBEF;border-radius:12px;padding:12px 14px;"><div style="font-size:11px;color:#9AA4B0;font-weight:700;">Cadillac</div><div style="font-size:13px;font-weight:800;margin-top:2px;">~650 assets/mo EN+FR</div></div>
+      <div style="flex:1 1 160px;background:#fff;border:1px solid #E7EBEF;border-radius:12px;padding:12px 14px;"><div style="font-size:11px;color:#9AA4B0;font-weight:700;">Social A1.1</div><div style="font-size:13px;font-weight:800;margin-top:2px;">4 brands · 16+ channels</div></div>
+    </div>
+
+    <div style="background:#0B0D10;border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:14px;">
+      <span style="font-size:10px;font-weight:900;letter-spacing:.1em;color:#04222B;background:#00BCF2;padding:5px 9px;border-radius:6px;flex-shrink:0;">GM</span>
+      <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:-.02em;">Client Brief</div><div style="font-size:12px;color:#9AA4B0;margin-top:2px;">Strategy + messaging · Smartsheet intake · FR/EN planning · BCR tracking</div></div>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-top:14px;">
+      <div style="flex:1;font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:${T1};">T1 — National Production</div>
+      <div style="flex:1;font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:${T2};text-align:right;">T2 — Regional + Automation</div>
+    </div>
+
+    ${conn('#C4CCD6')}
+    <div style="display:flex;flex-wrap:wrap;gap:12px;">
+      ${laneCard(T1,'Pre-production',['Director search · BA · talent negotiation','FR/EN planning · lock T1/T2 milestones · social content brief'],'Group EP T1/T2 · Agency EP · Executive Producer T2')}
+      ${split}
+    </div>
+    ${conn('#C4CCD6')}
+    <div style="display:flex;flex-wrap:wrap;gap:12px;">
+      ${laneCard(T1,'Shoot + post',['Broadcast :30/:15 · OLV · CTV · Print/OOH · radio masters','V/O records monthly · end card updates · 15s/30s cuts · EN+FR'],'Agency EP · producers · Studio Artists · Post production')}
+      ${laneCard(T2,'Automation platform',['DAM ingestion · template engine · rules engine · dynamic feeds','FR/EN bilingual — all outputs · DCO + asset generation'],'Dir. Studio Tech + Integration · Automation Engineer · FE Devs')}
+    </div>
+    ${conn('#C4CCD6')}
+    <div style="display:flex;flex-wrap:wrap;gap:12px;">
+      ${laneCard(T1,'Client presentation',['Concepts · T2 adapt preview · activation plan · social calendar','GM approval gate'],'Account · Creative leads')}
+      ${laneCard(T2,'DCO + asset generation',['OLA · social · OLV · CTV · dealer kits · search assets','Chevy ~1,305 · Buick/GMC ~900 · Cadillac ~650 /mo · EN+FR'],'Automation Engineer · FE Developers')}
+    </div>
+
+    ${conn(T2)}
+    ${fullCard(T2,T2+'0F','Merge','T1 Masters → DAM → T2 Production','Asset Central · Asset IQ sync · metadata tagged · rights tracked · Frame.io master library','Dir. Studio Tech + Integration · Traffic + Asset Manager · QA Brand Compliance Leads ×5')}
+    ${conn(SOC)}
+    <div style="background:${SOC}0F;border:1px solid ${SOC}45;border-radius:14px;padding:16px 18px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;"><div style="font-size:14px;font-weight:800;color:${SOC};">Social — Schedule A1.1</div><span style="font-size:11px;color:#9AA4B0;">4 brands · 16+ channels · EN+FR</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:11px;">${socPills}</div>
+      <div style="font-size:12px;color:#5A6470;line-height:1.5;margin-top:10px;">Strategy · content creation · community management · publishing · analytics · dealer asset distribution</div>
+      <div style="font-size:11px;color:${SOC};opacity:.85;margin-top:6px;font-weight:600;">Social Strategist EN · Social Strategist Quebec · Content Creators ×6 (3 EN + 3 FR)</div>
+    </div>
+    ${conn(GMC)}
+    ${fullCard(GMC,GMC+'0F','GM approval gate','Ziflow QA','Brand AI pre-scan · QA leads · FR legal sign-off · SLA clock · offer validation · audit trail','QA Brand Compliance Leads ×5 · Senior BA Lead T2 · BA Coordinator · internal pre-review before GM sees any asset')}
+    ${conn(T2)}
+    ${fullCard(T2,T2+'14','24hr SLA','Final Delivery','Media AOR · DAOR · Dealer Digital Solution Agency · DAM updated · delivery report auto-generated','Traffic + Asset Manager · Asset Central / Asset IQ · Opal return loop → GM calendar')}
+    ${conn(SOC)}
+    ${fullCard(SOC,SOC+'0F','Loops to next brief ↻','Performance insights loop','Offer + geo + inventory signals feed next adapt brief · BERA.ai brand equity · GA4 · Looker Studio dashboards','Data/Analytics Specialist · Group Strategy Director · Social Strategists')}
+
+    <div style="background:#fff;border:1px solid #E7EBEF;border-radius:14px;padding:16px 18px;margin-top:16px;">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9AA4B0;margin-bottom:12px;">Tech stack</div>
+      <div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:800;color:${T1};margin-bottom:6px;">T1 NATIONAL PRODUCTION</div><div style="display:flex;flex-wrap:wrap;gap:7px;">${t1Tools.map(t => pill(t,T1)).join('')}</div></div>
+      <div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:800;color:${T2};margin-bottom:6px;">T2 REGIONAL + AUTOMATION</div><div style="display:flex;flex-wrap:wrap;gap:7px;">${t2Tools.map(t => pill(t,T2)).join('')}</div></div>
+      <div><div style="font-size:10px;font-weight:800;color:#9AA4B0;margin-bottom:6px;">SHARED HANDOFF + GOOGLE STACK</div><div style="display:flex;flex-wrap:wrap;gap:7px;">${shTools.map(t => pill(t[0],t[1])).join('')}</div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;padding-top:12px;border-top:1px solid #F1F3F6;font-size:10.5px;color:#9AA4B0;">
+        <span style="color:${T1};font-weight:700;">■ T1 national</span><span style="color:${T2};font-weight:700;">■ T2 regional + automation</span><span style="color:${GMC};font-weight:700;">■ GM-mandated / shared</span><span style="color:${GOOG};font-weight:700;">■ Google stack</span><span style="color:${SOC};font-weight:700;">■ Social A1.1</span>
+        <span style="margin-left:auto;">~3,260 EN+FR assets/month · 8 regions · Chevy · GMC · Buick · Cadillac</span>
+      </div>
+    </div>
+  `;
 }
 
 function viewStaffing(V){
